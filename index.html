@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>じゅっぷんクラフト</title>
+<meta name="description" content="10分で集めて、作って、戦う。ブラウザで最大4人のブロック対戦サバイバル。">
+<meta property="og:title" content="じゅっぷんクラフト">
+<meta property="og:description" content="10分で集めて、作って、戦う。リンクを送るだけで最大4人のブロック対戦。">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://aiimpl.github.io/juppun-craft/ogp.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#20262e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23865e3e'/%3E%3Crect width='16' height='5' fill='%2360a03e'/%3E%3Crect x='6' y='8' width='4' height='4' fill='%236ae8e8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{--ink:#1d2229;--paper:#f3efe6;--line:#d9d2c2;--muted:#7b7466;--accent:#e0a030;--red:#d24a36;--green:#4caf50;--glass:rgba(16,18,22,.62);--glass2:rgba(16,18,22,.84);
+--sans:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;--pix:"DotGothic16","Zen Kaku Gothic New",monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#20262e;color:#fff;font-family:var(--sans);touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;cursor:pointer}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+[hidden]{display:none!important}
+.card{width:min(560px,100%);max-height:100%;overflow:auto;background:rgba(22,26,32,.9);border:2px solid rgba(255,255,255,.12);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.logo{font-family:var(--pix);font-size:clamp(34px,8vw,52px);line-height:1.05;margin:0;letter-spacing:.02em;text-shadow:3px 3px 0 #000}
+.logo span{color:var(--accent)}
+.sub{color:#cfc8b8;margin:10px 0 18px;line-height:1.7;font-size:15px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:.8em 1.4em;font-weight:700;font-size:16px;background:#e9e3d6;color:var(--ink);box-shadow:0 4px 0 #9a9384;transition:transform .05s}
+.btn:active{transform:translateY(2px);box-shadow:0 2px 0 #9a9384}
+.btn.primary{background:var(--accent);box-shadow:0 4px 0 #9a6a14}
+.btn.ghost{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+.btn.small{padding:.5em 1em;font-size:14px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;align-items:center}
+label.f{display:block;font-size:13px;color:#bdb6a6;margin:14px 0 6px}
+input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rgba(0,0,0,.3);color:#fff;border-radius:8px;padding:10px 12px;font:inherit;font-size:16px;outline:none}
+.chars{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.chars button{border:2px solid transparent;background:rgba(255,255,255,.07);border-radius:8px;padding:6px 2px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.chars button.on{border-color:var(--accent);background:rgba(224,160,48,.18)}
+.chars canvas{width:36px;height:36px;image-rendering:pixelated}
+.rules{font-size:13px;color:#bdb6a6;line-height:1.8;margin-top:16px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px}
+.rules b{color:#fff}
+.plist{margin:10px 0;display:flex;flex-direction:column;gap:6px}
+.plist div{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border-radius:8px;padding:8px 10px}
+.plist canvas{width:28px;height:28px;image-rendering:pixelated}
+.plist .st{margin-left:auto;font-size:12px;color:#bdb6a6}
+.plist .st.play{color:#8fe08f}
+.link{font-size:13px;word-break:break-all;background:rgba(0,0,0,.35);border-radius:8px;padding:10px;color:#e9e3d6}
+.note{font-size:12px;color:#9f988a;line-height:1.7}
+/* HUD */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5;text-shadow:0 1px 2px #000}
+.cross{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px}
+.cross:before,.cross:after{content:"";position:absolute;background:rgba(255,255,255,.9);mix-blend-mode:difference}
+.cross:before{left:9px;top:0;width:2px;height:20px}.cross:after{top:9px;left:0;height:2px;width:20px}
+.top{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center}
+.clock{font-family:var(--pix);font-size:32px;letter-spacing:.04em}
+.phase{font-size:13px;margin-top:2px;padding:3px 10px;border-radius:6px;background:var(--glass);display:inline-block}
+.phase.fight{color:#ff9a8a}.phase.safe{color:#9fe8a0}.phase.border{color:#ffd080}
+.board{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));background:var(--glass);border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.7;min-width:130px}
+.board div{display:flex;gap:8px;align-items:center}.board b{margin-left:auto;font-family:var(--pix)}
+.board canvas{width:16px;height:16px;image-rendering:pixelated}
+.feed{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 4px);left:max(10px,env(safe-area-inset-left));font-size:13px;line-height:1.8;max-width:44vw}
+.feed div{background:var(--glass);border-radius:6px;padding:1px 8px;margin-bottom:3px;animation:fade 6s forwards}
+@keyframes fade{0%,80%{opacity:1}100%{opacity:0}}
+.bottom{position:absolute;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.stats{display:flex;align-items:flex-end;width:100%;justify-content:space-between;padding:0 2px}
+.hearts{display:flex;gap:1px}
+.hearts i{width:16px;height:16px;display:block;image-rendering:pixelated;background-size:cover}
+.armor{font-size:12px;background:var(--glass);border-radius:6px;padding:1px 8px}
+.hotbar{display:flex;pointer-events:auto;background:rgba(0,0,0,.25);padding:2px;box-shadow:0 0 0 2px #000}
+.slot{width:46px;height:46px;border:2px solid rgba(255,255,255,.25);border-radius:4px;background:rgba(40,40,44,.6);position:relative;display:flex;align-items:center;justify-content:center}
+.slot.on{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+.slot canvas{width:32px;height:32px;image-rendering:pixelated}
+.slot b{position:absolute;right:3px;bottom:0;font-size:13px;font-family:var(--pix)}
+.itemname{font-size:15px;height:20px;font-family:var(--pix);text-shadow:2px 2px 0 #3f3f3f;transition:opacity .2s}
+.hurt{position:absolute;inset:0;box-shadow:inset 0 0 120px rgba(255,0,0,.55);opacity:0;transition:opacity .4s}
+.hurt.on{opacity:1;transition:none}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px}
+.big{font-family:var(--pix);font-size:clamp(40px,10vw,80px)}
+.hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:var(--glass2);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.9;white-space:nowrap;text-shadow:none}
+.hint kbd{display:inline-block;min-width:1.6em;padding:0 .35em;border-radius:4px;background:rgba(255,255,255,.18);font:inherit;text-align:center}
+.bowbar{position:absolute;left:50%;top:calc(50% + 24px);width:60px;height:5px;margin-left:-30px;background:rgba(0,0,0,.5);border-radius:3px;overflow:hidden}
+.bowbar i{display:block;height:100%;background:#fff;width:0}
+.spect{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--glass2);border-radius:10px;padding:8px 14px;font-size:14px}
+/* マイクラ風の持ち物画面 */
+.guiBack{background:rgba(0,0,0,.55);z-index:20}
+.gui{position:relative;background:#c6c6c6;border-radius:calc(var(--k)*3px);box-shadow:inset calc(var(--k)*2px) calc(var(--k)*2px) 0 #fff,inset calc(var(--k)*-2px) calc(var(--k)*-2px) 0 #555,0 0 0 calc(var(--k)*1px) #000;color:#404040;image-rendering:pixelated}
+.guiLabel{position:absolute;font-size:calc(var(--k)*6.5px);font-family:var(--pix);color:#404040;white-space:nowrap}
+.guiSmall{font-size:calc(var(--k)*5.5px);font-family:var(--pix);color:#404040;margin-top:4px}
+.gslot{position:absolute;width:calc(var(--k)*18px);height:calc(var(--k)*18px);background:#8b8b8b;box-shadow:inset calc(var(--k)*1px) calc(var(--k)*1px) 0 #373737,inset calc(var(--k)*-1px) calc(var(--k)*-1px) 0 #fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gslot:hover{background:#a2a2a2}
+.gslot canvas{width:calc(var(--k)*16px);height:calc(var(--k)*16px);image-rendering:pixelated;pointer-events:none}
+.gslot b{position:absolute;right:calc(var(--k)*1px);bottom:0;font-family:var(--pix);font-weight:400;font-size:calc(var(--k)*7px);color:#fff;text-shadow:calc(var(--k)*1px) calc(var(--k)*1px) 0 #3f3f3f;pointer-events:none}
+.gslot i,.hslot i{position:absolute;left:12%;right:12%;bottom:10%;height:2px;background:#000;pointer-events:none}
+.gslot i:after,.hslot i:after{content:"";position:absolute;left:0;top:0;height:100%;width:calc(var(--u)*100%);background:var(--c)}
+.gslot.big{width:calc(var(--k)*26px);height:calc(var(--k)*26px);margin:calc(var(--k)*-4px)}
+.gslot.sel{box-shadow:inset 0 0 0 calc(var(--k)*1px) #fff}
+.gslot.armor0:empty:before,.gslot.armor1:empty:before,.gslot.armor2:empty:before,.gslot.armor3:empty:before{font-family:var(--pix);font-size:calc(var(--k)*5px);color:#555;content:"頭"}
+.gslot.armor1:empty:before{content:"胴"}.gslot.armor2:empty:before{content:"脚"}.gslot.armor3:empty:before{content:"足"}
+.preview{position:absolute;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset calc(var(--k)*1px) calc(var(--k)*1px) 0 #373737}
+.preview canvas{image-rendering:pixelated}.preview .guiSmall{color:#ddd}
+.garrow{position:absolute;background:linear-gradient(90deg,#fff calc(var(--u)*100%),#8b8b8b calc(var(--u)*100%));clip-path:polygon(0 35%,60% 35%,60% 0,100% 50%,60% 100%,60% 65%,0 65%)}
+.flame{position:absolute;background:linear-gradient(0deg,#ff8a1a calc(var(--b)*100%),#8b8b8b calc(var(--b)*100%));clip-path:polygon(50% 0,80% 40%,100% 70%,75% 100%,25% 100%,0 70%,20% 40%)}
+.cursorItem{position:fixed;z-index:60;pointer-events:none;transform:translate(-50%,-50%);--k:3}
+.cursorItem .gslot{position:relative;background:none;box-shadow:none}
+.tclose{position:fixed;right:12px;top:calc(max(10px,env(safe-area-inset-top)));z-index:25;border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:#1d2229;font-weight:800}
+.notice{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:70;background:rgba(16,18,22,.94);border:2px solid rgba(255,255,255,.2);border-radius:12px;padding:18px 22px;max-width:90vw;text-align:center;line-height:1.7}
+/* マイクラ風の HUD */
+.icons{display:flex;height:18px}.icons i{width:18px;height:18px;margin-right:-1px;background-size:cover;image-rendering:pixelated}
+#hearts.low i{animation:shake .3s infinite}
+@keyframes shake{50%{transform:translateY(-1px)}}
+.hslot{width:44px;height:44px;position:relative;display:flex;align-items:center;justify-content:center;--k:2.5;box-shadow:inset 0 0 0 2px rgba(0,0,0,.6),inset 0 0 0 3px rgba(128,128,128,.5);background:rgba(0,0,0,.35)}
+.hslot.on{box-shadow:inset 0 0 0 3px #fff,0 0 0 2px #000;z-index:1}
+.hslot canvas{width:32px;height:32px;image-rendering:pixelated}
+.hslot b{position:absolute;right:3px;bottom:0;font-family:var(--pix);font-weight:400;font-size:16px;color:#fff;text-shadow:2px 2px 0 #3f3f3f}
+.atkbar{position:absolute;left:50%;top:calc(50% + 16px);width:22px;height:4px;margin-left:-11px;background:rgba(0,0,0,.5)}
+.atkbar i{display:block;height:100%;background:#fff;width:0}
+.tside{position:absolute;right:max(12px,env(safe-area-inset-right));top:calc(max(10px,env(safe-area-inset-top)) + 110px);display:flex;flex-direction:column;gap:8px}
+/* 結果 */
+.rank{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.rank div{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;font-size:16px}
+.rank div:first-child{background:rgba(224,160,48,.25)}
+.rank canvas{width:30px;height:30px;image-rendering:pixelated}
+.rank b{margin-left:auto;font-family:var(--pix)}
+/* タッチ */
+.touch{position:absolute;inset:0;pointer-events:auto}
+.stick{position:absolute;left:max(22px,env(safe-area-inset-left));bottom:max(96px,env(safe-area-inset-bottom));width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3)}
+.stick i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(255,255,255,.5)}
+.tbtns{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(96px,env(safe-area-inset-bottom));display:grid;grid-template-columns:auto auto;gap:10px;align-items:end}.tbtns .tb:nth-child(4){grid-column:1}
+.tb{width:62px;height:62px;border-radius:50%;border:0;background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);font-weight:800;font-size:13px;color:#fff;text-shadow:0 1px 2px #000}
+.tb.big{width:80px;height:80px;font-size:15px}
+.tb.on{background:rgba(224,160,48,.55)}
+.tinv{width:52px;height:40px;border-radius:10px;border:0;background:var(--glass);color:#fff;font-weight:800;font-size:12px;pointer-events:auto}
+@media (max-width:640px){.hslot{width:36px;height:36px}.hslot canvas{width:26px;height:26px}.icons i{width:14px;height:14px}.icons{height:14px}.hint{display:none}.board{font-size:11px;min-width:100px}.clock{font-size:24px}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<section id="title" class="screen">
+  <div class="card">
+    <h1 class="logo">じゅっぷん<br><span>クラフト</span></h1>
+    <p class="sub">10分で集めて、作って、戦う。<br>リンクを送るだけで、最大4人のブロック対戦。</p>
+    <div id="joinBox" class="row" hidden><b id="joinLabel"></b></div>
+    <label class="f">名前</label>
+    <input type="text" id="name" maxlength="10" placeholder="10文字まで">
+    <label class="f">キャラクター</label>
+    <div class="chars" id="chars"></div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn primary" id="bJoin" hidden>部屋に入る</button>
+      <button class="btn primary" id="bHost">部屋を作る</button>
+      <button class="btn ghost" id="bSolo">ひとりで練習</button>
+    </div>
+    <div class="rules">
+      <b>ルール</b>　最初の2分は準備時間（攻撃できません）。木を切って道具を作り、石や鉄を掘って武器を強くしよう。2分から戦闘開始、最後の2分は赤い境界がどんどん狭まります。10分で<b>倒した数</b>が多い人の勝ち。倒されると持ち物をその場に落とし、5秒後に復活します。<br>
+      <b>定員4人</b>。5人目からは観戦しながら待ち、次の試合から入れます。
+    </div>
+    <p class="note">通信はブラウザ同士を直接つなぎます（接続の仲介に PeerJS の公開サーバーを使います）。会社や学校のネットワークではつながらないことがあります。</p>
+  </div>
+</section>
+
+<section id="lobby" class="screen" hidden>
+  <div class="card">
+    <h2 style="margin:0 0 6px">待合室</h2>
+    <div class="note" id="lobbyNote"></div>
+    <div id="shareBox">
+      <label class="f">このリンクを送ると、同じ部屋に入れます</label>
+      <div class="link" id="roomLink"></div>
+      <div class="row"><button class="btn small" id="bCopy">コピー</button><button class="btn small" id="bShare" hidden>共有</button></div>
+    </div>
+    <label class="f">参加者（<span id="pcount"></span>）</label>
+    <div class="plist" id="plist"></div>
+    <div class="row"><button class="btn primary" id="bStart" hidden>試合を始める</button><span id="waitHost" class="note" hidden>部屋を作った人が始めるのを待っています…</span></div>
+    <div class="row"><button class="btn ghost small" id="bLeave">タイトルへ</button></div>
+  </div>
+</section>
+
+<div id="hud" hidden>
+  <div class="cross"></div>
+  <div class="bowbar" id="bowbar" hidden><i id="bowfill"></i></div>
+  <div class="feed" id="feed"></div>
+  <div class="top"><div class="clock" id="clock">10:00</div><div class="phase" id="phase"></div></div>
+  <div class="board" id="board"></div>
+  <div class="spect" id="spect" hidden></div>
+  <div class="atkbar" id="atkbar" hidden><i id="atkfill"></i></div>
+  <div class="bottom" id="hotbarWrap">
+    <div class="itemname" id="itemname"></div>
+    <div class="stats"><div><div class="icons" id="armorRow"></div><div class="icons" id="hearts"></div></div><div class="icons" id="food"></div></div>
+    <div class="hotbar" id="hotbar"></div>
+  </div>
+  <div class="hurt" id="hurt"></div>
+  <div class="center" id="centerMsg" hidden><div class="big" id="bigMsg"></div><div id="smallMsg"></div></div>
+  <div class="hint" id="hint" hidden>
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> ジャンプ　<kbd>E</kbd> 持ち物（2×2クラフト）　作業台・かまどは右クリックで開く　<kbd>1</kbd>〜<kbd>9</kbd> 持ち替え<br>
+    左クリック 掘る・攻撃　右クリック 置く・使う・食べる・弓を引く　<kbd>Q</kbd> 捨てる　<kbd>Shift</kbd> しゃがむ　<kbd>Ctrl</kbd>／<kbd>W</kbd>2回 走る
+  </div>
+  <div class="touch" id="touch" hidden>
+    <div class="stick" id="stick"><i></i></div>
+    <div class="tbtns"><button class="tb" id="tAtk">攻撃</button><button class="tb big" id="tJump">跳ぶ</button><button class="tb" id="tUse">置く</button><button class="tb" id="tSneak">しゃがむ</button></div>
+    <div class="tside"><button class="tinv" id="tInv">持物</button><button class="tinv" id="tDrop">捨てる</button></div>
+  </div>
+</div>
+
+<section id="gui" class="screen guiBack" hidden></section>
+<button class="tclose" id="tClose" hidden>閉じる</button>
+
+<section id="result" class="screen" hidden>
+  <div class="card">
+    <h2 style="margin:0">試合終了</h2>
+    <div class="rank" id="rank"></div>
+    <div class="note" id="resNote"></div>
+    <div class="row"><button class="btn primary" id="bAgain" hidden>もう一度（同じ部屋で）</button><span class="note" id="resWait"></span></div>
+    <div class="row"><button class="btn ghost small" id="bResTitle">タイトルへ</button></div>
+  </div>
+</section>
+
+<script src="vendor/peerjs/peerjs.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
