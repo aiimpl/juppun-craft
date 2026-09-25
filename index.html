@@ -35,6 +35,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .row{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;align-items:center}
 label.f{display:block;font-size:13px;color:#bdb6a6;margin:14px 0 6px}
 input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rgba(0,0,0,.3);color:#fff;border-radius:8px;padding:10px 12px;font:inherit;font-size:16px;outline:none}
+.wordrow input{flex:1;min-width:0}.wordrow .btn{flex:none}
 .chars{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
 .chars button{border:2px solid transparent;background:rgba(255,255,255,.07);border-radius:8px;padding:6px 2px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:4px}
 .chars button.on{border-color:var(--accent);background:rgba(224,160,48,.18)}
@@ -149,10 +150,16 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
     <label class="f">キャラクター</label>
     <div class="chars" id="chars"></div>
     <div class="row" style="margin-top:18px">
-      <button class="btn primary" id="bJoin" hidden>部屋に入る</button>
-      <button class="btn primary" id="bHost">部屋を作る</button>
+      <button class="btn primary" id="bJoin" hidden>招待された部屋に入る</button>
+      <button class="btn primary" id="bQuick">だれかと対戦する</button>
       <button class="btn ghost" id="bSolo">ひとりで練習</button>
     </div>
+    <label class="f">友達と遊ぶ</label>
+    <form class="row wordrow" id="wordForm" style="margin-top:0">
+      <input type="text" id="word" maxlength="20" placeholder="あいことば（例：たぬき123）" enterkeyhint="go">
+      <button class="btn" id="bWord">あいことばで入る</button>
+    </form>
+    <div class="row" style="margin-top:0"><button class="btn ghost small" id="bHost">招待リンクを作る</button><span class="note">同じあいことばを入れた人どうしが同じ部屋に入ります</span></div>
     <div class="rules">
       <b>ルール</b>　全員がパラシュートで島の四隅に降下。最初の2分は準備時間（攻撃できません）。木を切って道具を作り、石や鉄を掘って武器を強くしよう。3分から赤い安全地帯がどんどん狭まり、外にいると体力が減ります。倒されたら脱落（持ち物はその場に落ちます）。<b>最後の1人がドン勝</b>。10分たっても決着しなければ、生き残りのうち倒した数が多い人の勝ち。<br>
       <b>定員4人</b>。5人目からは観戦しながら待ち、次の試合から入れます。
@@ -163,7 +170,8 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 
 <section id="lobby" class="screen" hidden>
   <div class="card">
-    <h2 style="margin:0 0 6px">待合室</h2>
+    <h2 style="margin:0 0 6px" id="lobbyTitle">待合室</h2>
+    <div class="note" id="wordShow" hidden></div>
     <div class="note" id="lobbyNote"></div>
     <div id="shareBox">
       <label class="f">このリンクを送ると、同じ部屋に入れます</label>

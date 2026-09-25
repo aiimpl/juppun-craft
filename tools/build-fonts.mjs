@@ -19,7 +19,6 @@ let total = 0, count = 0;
 for (const F of FAMS) {
   const dir = path.join(root, 'fonts', F.pkg);
   fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) if (f.endsWith('.woff2')) fs.unlinkSync(path.join(dir, f));
   for (const w of F.weights) {
     const base = `https://cdn.jsdelivr.net/npm/@fontsource/${F.pkg}@5/`;
     const txt = await (await fetch(`${base}${w}.css`)).text();
@@ -36,5 +35,7 @@ for (const F of FAMS) {
     }
   }
 }
+const keep = new Set(css.match(/[\w-]+\.woff2/g));
+for (const F of FAMS) { const dir = path.join(root, 'fonts', F.pkg); for (const f of fs.readdirSync(dir)) if (f.endsWith('.woff2') && !keep.has(f)) fs.unlinkSync(path.join(dir, f)); }
 fs.writeFileSync(path.join(root, 'fonts', 'fonts.css'), css);
 console.log(`chars ${chars.size}, files ${count}, ${(total / 1024 / 1024).toFixed(2)} MB`);

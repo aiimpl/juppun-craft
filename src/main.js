@@ -9,7 +9,7 @@ import { ContainerUI } from './ui.js';
 import { ItemEntities, itemModel } from './items.js';
 import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachute, Debris } from './entities.js';
 import { Sound } from './audio.js';
-import { Net } from './net.js';
+import { Net, codeFromWord, PUBLIC_SLOTS } from './net.js';
 
 const $ = id => document.getElementById(id);
 const mobile = matchMedia('(pointer: coarse)').matches;
@@ -76,24 +76,65 @@ function saveMe() {
 }
 const joinCode = new URLSearchParams(location.hash.slice(1)).get('r');
 if (joinCode) { $('joinBox').hidden = false; $('joinLabel').textContent = `部屋「${joinCode}」に招待されています`; $('bJoin').hidden = false; $('bHost').classList.remove('primary'); }
+// 部屋を作る／入る（kind: 'link'＝リンクで招待、'word'＝あいことば、'pub'＝だれでも参加）
+async function becomeHost(code, kind, label) {
+  net = new Net(); bindNet(); await net.host(code);
+  isHost = true; myId = 'h'; clockOff = 0;
+  room = { code, kind, label, players: {}, queue: [], roster: {}, phase: 'lobby', seed: 0, t0: 0, startAt: 0 };
+  addPlayer('h', me.name, me.char);
+  if (kind === 'link') history.replaceState(null, '', location.pathname + location.search + '#r=' + code);
+  showLobby();
+}
+async function joinRoom(code) {
+  net = new Net(); bindNet(); myId = await net.join(code); isHost = false;
+  net.send('h', { t: 'hello', name: me.name, char: me.char });
+  syncClock();
+}
+function syncClock() { for (let i = 0; i < 5; i++) setTimeout(() => net?.send('h', { t: 'ping', c: performance.now() }), i * 300); }
+function busy(btn, text) { const old = btn.textContent; btn.disabled = true; btn.textContent = text; return () => { btn.disabled = false; btn.textContent = old; }; }
 $('bHost').onclick = async () => {
-  S.init(); saveMe(); $('bHost').disabled = true; $('bHost').textContent = '部屋を作っています…';
-  try {
-    net = new Net(); bindNet(); const code = await net.host();
-    isHost = true; myId = 'h'; clockOff = 0;
-    room = { code, players: {}, queue: [], roster: {}, phase: 'lobby', seed: 0, t0: 0 };
-    addPlayer('h', me.name, me.char); history.replaceState(null, '', location.pathname + location.search + '#r=' + code); showLobby();
-  } catch (e) { notice('部屋を作れませんでした。時間をおいて試してください。'); console.error(e); }
-  finally { $('bHost').disabled = false; $('bHost').textContent = '部屋を作る'; }
+  S.init(); saveMe(); const done = busy($('bHost'), '部屋を作っています…');
+  try { await becomeHost(Math.random().toString(36).slice(2, 8), 'link'); }
+  catch (e) { notice('部屋を作れませんでした。時間をおいて試してください。'); console.error(e); }
+  finally { done(); }
 };
 $('bJoin').onclick = async () => {
-  S.init(); saveMe(); $('bJoin').disabled = true; $('bJoin').textContent = 'つないでいます…';
+  S.init(); saveMe(); const done = busy($('bJoin'), 'つないでいます…');
+  try { await joinRoom(joinCode); }
+  catch (e) { notice('部屋に入れませんでした。部屋が閉じているか、ネットワークでつながらない可能性があります。'); console.error(e); net?.close(); net = null; }
+  finally { done(); }
+};
+// あいことば：同じ言葉なら同じ部屋。部屋がなければ自分が部屋主になる
+$('wordForm').onsubmit = async e => {
+  e.preventDefault(); S.init(); saveMe();
+  const word = $('word').value.trim(); if (!word) { $('word').focus(); return; }
+  const code = codeFromWord(word), done = busy($('bWord'), 'さがしています…');
   try {
-    net = new Net(); bindNet(); myId = await net.join(joinCode); isHost = false;
-    net.send('h', { t: 'hello', name: me.name, char: me.char });
-    for (let i = 0; i < 5; i++) setTimeout(() => net.send('h', { t: 'ping', c: performance.now() }), i * 300);
-  } catch (e) { notice('部屋に入れませんでした。部屋が閉じているか、ネットワークでつながらない可能性があります。'); console.error(e); net?.close(); net = null; }
-  finally { $('bJoin').disabled = false; $('bJoin').textContent = '部屋に入る'; }
+    for (let k = 0; k < 3; k++) {
+      try { await joinRoom(code); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'peer-unavailable') throw err; }
+      try { await becomeHost(code, 'word', word); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'unavailable-id') throw err; }
+    }
+    throw new Error('retry');
+  } catch (err) { notice('部屋に入れませんでした。もう一度試すか、別のあいことばにしてください。'); console.error(err); }
+  finally { done(); }
+};
+// だれでも参加：待合室のある公開部屋→試合中の部屋（観戦して待つ）→なければ自分が部屋を開く
+$('bQuick').onclick = async () => {
+  S.init(); saveMe(); const done = busy($('bQuick'), '対戦相手をさがしています…');
+  const slots = [...Array(PUBLIC_SLOTS).keys()].map(i => 'pub' + i);
+  try {
+    for (const pass of [1, 2]) {
+      net = new Net(); bindNet();
+      const r = await net.quick(slots, { t: 'hello', name: me.name, char: me.char }, pass);
+      if (r.welcome) { isHost = false; clientHandle(r.welcome); syncClock(); return; }
+      net.close(); net = null;
+      if (r.empty && pass === 1) {
+        try { await becomeHost(r.empty, 'pub'); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'unavailable-id') throw err; }
+      }
+    }
+    notice('いまは入れる部屋がありません。少し待ってから試してください。');
+  } catch (err) { notice('つなげませんでした。ネットワークを確かめてください。'); console.error(err); net?.close(); net = null; }
+  finally { done(); }
 };
 $('bSolo').onclick = () => {
   S.init(); saveMe(); solo = true; isHost = true; myId = 'h'; clockOff = 0;
@@ -124,6 +165,11 @@ function hostHandle(from, m) {
   const P = room.players[from];
   switch (m.t) {
     case 'hello':
+      if (m.quick) { // だれでも参加の受け入れ：1回目は待合室で空きがある部屋だけ、2回目は観戦待ちも
+        const n = Object.keys(room.players).length;
+        const ok = room.kind === 'pub' && (m.quick === 1 ? room.phase === 'lobby' && n < MAXP : n < MAXP * 2);
+        if (!ok) { sendTo(from, { t: 'full' }); net.kick(from); return; }
+      }
       if (!room.players[from]) addPlayer(from, m.name, m.char);
       sendTo(from, { t: 'welcome', you: from, room, mods: [...mods], items: [...hostItems.values()] });
       bcast({ t: 'room', room }, from);
@@ -211,9 +257,31 @@ function clientHandle(m) {
 }
 
 // ---------- 待合室 ----------
+// 公開部屋：2人そろったら20秒後、4人なら5秒後に自動で開始。結果のあとは10秒で待合室へ
+setInterval(() => {
+  if (!isHost || !room || room.kind !== 'pub' || solo) return;
+  const n = room.queue.filter(id => room.players[id]).length;
+  if (room.phase === 'lobby') {
+    let want = n >= MAXP ? now() + 5000 : n >= 2 ? now() + 20000 : 0;
+    if (!want) { if (room.startAt) { room.startAt = 0; bcast({ t: 'room', room }); } }
+    else if (!room.startAt || want < room.startAt - 1000) { room.startAt = want; bcast({ t: 'room', room }); }
+    if (room.startAt && now() >= room.startAt) { room.startAt = 0; startMatch(); }
+  } else if (room.phase === 'result') {
+    if (!room.backAt) room.backAt = now() + 10000;
+    if (now() >= room.backAt) { room.backAt = 0; room.phase = 'lobby'; bcast({ t: 'room', room }); showLobby(); }
+  }
+}, 500);
+setInterval(() => { if (state === 'lobby' && room?.kind === 'pub') lobbyStatus(); }, 500);
+function lobbyStatus() {
+  const n = room.queue.filter(id => room.players[id]).length;
+  $('lobbyNote').textContent = room.startAt ? `あと ${Math.max(0, Math.ceil((room.startAt - now()) / 1000))} 秒で試合が始まります（${n}/${MAXP}人）` : `対戦相手を待っています（${n}/${MAXP}人）。2人そろうと自動で始まります`;
+}
 function showLobby() {
   state = 'lobby'; show('lobby'); $('hud').hidden = true; gui.close(); document.exitPointerLock?.();
   const url = `${location.origin}${location.pathname}#r=${room.code}`;
+  $('shareBox').hidden = room.kind === 'pub';
+  $('wordShow').hidden = room.kind !== 'word'; if (room.kind === 'word') $('wordShow').innerHTML = `あいことば「<b>${esc(room.label || '')}</b>」の部屋です。同じあいことばを入れた人が入れます`;
+  $('lobbyTitle').textContent = room.kind === 'pub' ? 'だれでも参加の部屋' : '待合室';
   $('roomLink').textContent = url; $('bShare').hidden = !navigator.share;
   $('bCopy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('bCopy').textContent = 'コピーしました'; setTimeout(() => $('bCopy').textContent = 'コピー', 1500); } catch (e) { } };
   $('bShare').onclick = () => navigator.share({ title: 'じゅっぷんクラフト', text: '10分サバイバル対戦しよう', url }).catch(() => { });
@@ -226,8 +294,9 @@ function showLobby() {
     const st = document.createElement('span'); st.className = 'st' + (i < MAXP ? ' play' : ''); st.textContent = i < MAXP ? '次の試合に参加' : `待ち ${i - MAXP + 1}番目`; d.append(st);
     $('plist').appendChild(d);
   });
-  $('bStart').hidden = !isHost; $('waitHost').hidden = isHost;
-  $('lobbyNote').textContent = isHost ? '人がそろったら「試合を始める」を押してください。1人でも始められます。' : '';
+  const pub = room.kind === 'pub';
+  $('bStart').hidden = !isHost || pub; $('waitHost').hidden = isHost || pub;
+  if (pub) lobbyStatus(); else $('lobbyNote').textContent = isHost ? '人がそろったら「試合を始める」を押してください。1人でも始められます。' : '';
 }
 $('bStart').onclick = () => { if (isHost) startMatch(); };
 $('bLeave').onclick = $('bResTitle').onclick = () => { net?.close(); location.hash = ''; location.reload(); };
@@ -772,7 +841,7 @@ function showResult() {
   if (room.winner === myId) S.win?.();
   const waiting = room.queue.filter(id => room.players[id] && !(id in room.roster)).length;
   $('resNote').textContent = solo ? 'ひとりで練習した結果です。部屋を作ると友達と対戦できます。' : waiting ? `次の試合は、待っていた ${waiting}人が先に入ります。` : '';
-  $('bAgain').hidden = !isHost; $('resWait').textContent = isHost ? '' : '部屋を作った人が次の試合を始めるのを待っています';
+  $('bAgain').hidden = !isHost || room.kind === 'pub'; $('resWait').textContent = room.kind === 'pub' ? 'まもなく待合室に戻ります' : isHost ? '' : '部屋を作った人が次の試合を始めるのを待っています';
 }
 
 world = new World(12345); R.buildAll(world);
