@@ -1,11 +1,12 @@
-// マイクラと同じ操作の持ち物画面（持ち物・作業台・かまど）
+// 持ち物画面（持ち物・作業台・かまど・宝箱）
 import { ITEMS, matchRecipe, iconCanvas, SMELT, FUEL } from './blocks.js';
 import { MAIN, HOT, stackMax, same } from './inv.js';
 
-// GUI の座標は 1マス＝18（マイクラの GUI と同じ）。画面に合わせて拡大する
+// GUI の座標は 1マス＝18。画面に合わせて拡大する
 const LAYOUT = {
   inv: { w: 176, h: 166, title: 'クラフト', grid: { x: 98, y: 18, n: 2 }, out: { x: 154, y: 28 }, arrow: { x: 134, y: 28 }, armor: { x: 8, y: 8 }, preview: { x: 26, y: 8, w: 50, h: 70 } },
   table: { w: 176, h: 166, title: '作業台', grid: { x: 30, y: 17, n: 3 }, out: { x: 124, y: 35 }, arrow: { x: 90, y: 35 } },
+  chest: { w: 176, h: 166, title: '宝箱', box: { x: 8, y: 18, rows: 3 } },
   furnace: { w: 176, h: 166, title: 'かまど', fin: { x: 56, y: 17 }, ffuel: { x: 56, y: 53 }, fout: { x: 116, y: 35 }, arrow: { x: 79, y: 35 }, flame: { x: 57, y: 37 } },
 };
 
@@ -32,15 +33,15 @@ export class ContainerUI {
       this.distribute(D.refs, D.btn);
     });
   }
-  show(kind, furnace = null) {
-    this.kind = kind; this.furnace = furnace; this.open = true;
+  show(kind, data = null) {
+    this.kind = kind; this.furnace = kind === 'furnace' ? data : null; this.box = kind === 'chest' ? data : null; this.open = true;
     const n = LAYOUT[kind].grid?.n || 0; this.grid = Array(n * n).fill(null);
     this.root.hidden = false; this.render();
   }
   close() {
     if (!this.open) return;
     for (const s of [...this.grid, this.cursor]) if (s) { const left = this.inv.add(s); if (left) this.drop({ ...s, n: left }); }
-    this.grid = []; this.cursor = null; this.open = false; this.root.hidden = true; this.cur.innerHTML = '';
+    this.grid = []; this.cursor = null; this.open = false; this.box = null; this.root.hidden = true; this.cur.innerHTML = '';
   }
   scale() { return Math.max(1.6, Math.min(3.4, Math.floor(Math.min(innerWidth * 0.96 / 176, innerHeight * 0.92 / 166) * 10) / 10)); }
   // ---- 表示 ----
@@ -90,6 +91,10 @@ export class ContainerUI {
       this.arrow(p, L.arrow, k, 1);
       slot(L.out.x, L.out.y, this.outArr, 0, 'out', 'big');
     }
+    if (this.kind === 'chest') {
+      const L2 = L.box;
+      for (let r = 0; r < L2.rows; r++) for (let c = 0; c < 9; c++) slot(L2.x + c * 18, L2.y + r * 18, this.box.slots, r * 9 + c, 'chest');
+    }
     if (this.kind === 'furnace') {
       const F = this.furnace;
       slot(L.fin.x, L.fin.y, F.slots, 0, 'fin'); slot(L.ffuel.x, L.ffuel.y, F.slots, 1, 'ffuel'); slot(L.fout.x, L.fout.y, F.slots, 2, 'fout', 'big');
@@ -116,7 +121,7 @@ export class ContainerUI {
     this.furnaceEls.fl.style.setProperty('--b', F.burnMax ? F.burn / F.burnMax : 0);
     if (F.dirty) { F.dirty = false; this.render(); }
   }
-  // ---- クリック（マイクラと同じ） ----
+  // ---- クリック ----
   click(ref, btn, shift) {
     const { arr, i, kind } = ref, s = arr[i];
     if (kind === 'out') return this.takeOutput(shift);
@@ -189,6 +194,7 @@ export class ContainerUI {
     if (kind === 'main') {
       const as = this.inv.slotFor(s.id);
       if (this.kind === 'inv' && as >= 0 && !this.inv.armor[as]) { this.inv.armor[as] = s; arr[i] = null; return; }
+      if (this.kind === 'chest') return moveTo([[this.box.slots, 0, this.box.slots.length]]);
       if (this.kind === 'furnace') {
         const F = this.furnace.slots;
         if (SMELT[s.id] && (!F[0] || same(F[0], s))) return moveTo([[F, 0, 1]]);

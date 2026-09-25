@@ -13,7 +13,7 @@ function blockMats(id, atlasFaces) {
   if (blockMatCache.has(id)) return blockMatCache.get(id);
   const m = atlasFaces(ITEMS[id].block); blockMatCache.set(id, m); return m;
 }
-// ドット絵を1ドットずつ押し出した立体（マイクラの手持ち・落ちたアイテムと同じ作り）
+// ドット絵を1ドットずつ押し出した立体（手に持つ物・落ちている物の見た目）
 const extrudeCache = new Map();
 const lin = v => Math.pow(v / 255, 2.2);
 function extruded(id) {

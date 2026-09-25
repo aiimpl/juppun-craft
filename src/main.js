@@ -10,6 +10,7 @@ import { ItemEntities, itemModel } from './items.js';
 import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachute, swayParachute, Trail, Debris } from './entities.js';
 import { Sound } from './audio.js';
 import { Net, codeFromWord, PUBLIC_SLOTS } from './net.js';
+import { rollLoot } from './loot.js';
 
 const $ = id => document.getElementById(id);
 const mobile = matchMedia('(pointer: coarse)').matches;
@@ -30,6 +31,8 @@ const inv = new Inventory();
 let hp = 20, food = 20, sat = 5, exhaust = 0, dead = false, respawnAt = 0, lastHurt = -1e9, protectUntil = 0;
 let lastAttacker = null, lastAttackerAt = -1e9, lastWeapon = null, hurtRoll = 0, hurtDir = 1;
 const others = new Map(), arrows = [], furnaces = new Map();
+let chestLoot = new Map(); // 部屋主だけが持つ、宝箱の中身（開けた人に配って、閉じたら受け取る）
+let blocking = false; // 盾をかまえているか
 let mods = new Map(), hostItems = new Map(), itemSeq = 0;
 const debris = new Debris(R.scene);
 const me = { name: '', char: 0 };
@@ -145,7 +148,7 @@ $('bSolo').onclick = () => {
 // ---------- 通信 ----------
 function bindNet() {
   net.on.msg = (from, m) => isHost && from !== 'h' ? hostHandle(from, m) : clientHandle(m);
-  net.on.leave = id => { if (!isHost || !room.players[id]) return; feed(`${esc(room.players[id].name)} が抜けました`); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); if (room.alive?.[id]) { delete room.alive[id]; room.elim.push(id); } removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); checkEnd(); };
+  net.on.leave = id => { if (!isHost || !room.players[id]) return; releaseChests(id); feed(`${esc(room.players[id].name)} が抜けました`); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); if (room.alive?.[id]) { delete room.alive[id]; room.elim.push(id); } removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); checkEnd(); };
   net.on.lost = () => { if (state !== 'title') notice('部屋との接続が切れました', true); };
   net.on.error = e => console.warn('net', e?.type, e);
 }
@@ -161,6 +164,18 @@ function addPlayer(id, name, char) {
   room.players[id] = { name: nm, char: (char | 0) % CHARS.length, kills: 0, deaths: 0, color: COLORS.find(c => !used.includes(c)) || '#fff' };
   room.queue.push(id);
 }
+// 部屋主：宝箱を開けた人に中身を渡す（同時に開けられないように、閉じるまで貸し出す）
+function chestState(k, by) {
+  let c = chestLoot.get(k);
+  if (!c) {
+    const i = (world?.chests || []).findIndex(p => p.join(',') === k); if (i < 0) return null;
+    c = { slots: rollLoot(room.seed + i * 7919, i === (room.seed >>> 3) % 2), lock: null };
+    chestLoot.set(k, c);
+  }
+  if (c.lock && c.lock !== by && room.players[c.lock]) return null;
+  c.lock = by; return c;
+}
+function releaseChests(id) { for (const c of chestLoot.values()) if (c.lock === id) c.lock = null; }
 function hostHandle(from, m) {
   const P = room.players[from];
   switch (m.t) {
@@ -187,6 +202,7 @@ function hostHandle(from, m) {
       if (!P) return;
       P.deaths++;
       const K = m.killer && room.players[m.killer]; if (K && m.killer !== from) K.kills++;
+      releaseChests(from);
       if (room.alive?.[from]) { delete room.alive[from]; room.elim.push(from); }
       bcast({ t: 'died', id: from, killer: K ? m.killer : null, cause: m.cause, w: m.w, left: Object.keys(room.alive || {}).length });
       bcast({ t: 'room', room });
@@ -196,6 +212,8 @@ function hostHandle(from, m) {
     case 'ispawn': hostItems.set(m.id, { id: m.id, st: m.st, p: m.p }); bcast(m, from); break;
     case 'ipick': { const e = hostItems.get(m.id); if (!e) return; hostItems.delete(m.id); sendTo(from, { t: 'igrant', id: m.id, st: e.st }); bcast({ t: 'igone', id: m.id }); break; }
     case 'arrow': bcast({ ...m, id: from }, from); break;
+    case 'chestOpen': { const c = chestState(m.k, from); if (!c) { sendTo(from, { t: 'chestBusy' }); return; } sendTo(from, { t: 'chestData', k: m.k, slots: c.slots }); break; }
+    case 'chestSet': { const c = chestLoot.get(m.k); if (!c || c.lock !== from) return; c.slots = m.slots; c.lock = null; break; }
   }
 }
 function startMatch() {
@@ -205,7 +223,7 @@ function startMatch() {
   room.seed = Math.floor(Math.random() * 1e9); room.t0 = now() + (solo ? 4000 : 6000); room.phase = 'game'; room.cfg = CFG;
   room.alive = {}; ids.forEach(id => room.alive[id] = true); room.elim = []; room.winner = null;
   room.zone = [WS / 2 + (Math.random() - 0.5) * WS * 0.28, WS / 2 + (Math.random() - 0.5) * WS * 0.28];
-  mods = new Map(); hostItems = new Map();
+  mods = new Map(); hostItems = new Map(); chestLoot = new Map();
   bcast({ t: 'start', room });
 }
 // 生き残りが1人（ひとりの練習では0人）になったら終わり
@@ -241,7 +259,7 @@ function clientHandle(m) {
       if (m.id === myId) return;
       let o = others.get(m.id); if (!o) o = addOther(m.id); if (!o) return;
       if (m.hp < o.hp && !m.dead) o.hurtT = 0.45;
-      o.tp = m.p; o.yaw = m.yaw; o.pitch = m.pitch; o.hp = m.hp; o.dead = m.dead; o.sneak = m.sn; o.chute.visible = !!m.pa && !m.dead;
+      o.tp = m.p; o.yaw = m.yaw; o.pitch = m.pitch; o.hp = m.hp; o.dead = m.dead; o.sneak = m.sn; o.blocking = !!m.bl; o.chute.visible = !!m.pa && !m.dead;
       if (m.sw) o.swing = 0.001;
       setHeldModel(o, m.held || null); drawTag(o.model.userData.tag, m.hp);
       break;
@@ -253,6 +271,9 @@ function clientHandle(m) {
     case 'igone': items.remove(m.id); break;
     case 'igrant': { const left = inv.add(m.st); if (left) throwStack({ ...m.st, n: left }); S.pickup(); break; }
     case 'arrow': if (m.id !== myId) spawnArrow(m.p, m.v, m.id, false); break;
+    // 開けるより先に倒されたら、中身はそのまま部屋主に返す
+    case 'chestData': if (state === 'play' && !dead && !spectator) openGui('chest', { k: m.k, slots: m.slots.map(x => x ? { ...x } : null) }); else toHost({ t: 'chestSet', k: m.k, slots: m.slots }); break;
+    case 'chestBusy': feed('だれかが開けています'); break;
   }
 }
 
@@ -277,7 +298,7 @@ function lobbyStatus() {
   $('lobbyNote').textContent = room.startAt ? `あと ${Math.max(0, Math.ceil((room.startAt - now()) / 1000))} 秒で試合が始まります（${n}/${MAXP}人）` : `対戦相手を待っています（${n}/${MAXP}人）。2人そろうと自動で始まります`;
 }
 function showLobby() {
-  state = 'lobby'; show('lobby'); $('hud').hidden = true; gui.close(); document.exitPointerLock?.();
+  state = 'lobby'; show('lobby'); $('hud').hidden = true; guiClose(); document.exitPointerLock?.();
   const url = `${location.origin}${location.pathname}#r=${room.code}`;
   $('shareBox').hidden = room.kind === 'pub';
   $('wordShow').hidden = room.kind !== 'word'; if (room.kind === 'word') $('wordShow').innerHTML = `あいことば「<b>${esc(room.label || '')}</b>」の部屋です。同じあいことばを入れた人が入れます`;
@@ -304,10 +325,10 @@ $('bAgain').onclick = () => { if (solo) return startMatch(); if (isHost) { room.
 
 // ---------- 試合に入る ----------
 function enterGame(modList, itemList) {
-  state = 'play'; show(null); $('hud').hidden = false; gui.close();
+  state = 'play'; show(null); $('hud').hidden = false; guiClose();
   for (const id of [...others.keys()]) removeOther(id);
   for (const a of arrows) R.scene.remove(a.mesh); arrows.length = 0;
-  items.clear(); furnaces.clear();
+  items.clear(); furnaces.clear(); chestLoot = new Map(); blocking = false; bowTold = shieldTold = false;
   world = new World(room.seed); items.w = world;
   for (const [k, v] of modList) { const [x, y, z] = k.split(',').map(Number); world.set(x, y, z, v, true); }
   world.onSet = (x, y, z, v) => toHost({ t: 'block', x, y, z, v });
@@ -390,6 +411,16 @@ function onTouchItem(e) {
 // ---------- 体力・満腹度・倒される ----------
 function takeHit(m) {
   if (dead || spectator || performance.now() < protectUntil) return;
+  // 盾：正面（前から来た攻撃）だけ防ぐ。防ぐたびに少しすり減る
+  if (blocking && ITEMS[inv.held()?.id]?.shield) {
+    const d = player.dir();
+    if (d[0] * (m.kx || 0) + d[2] * (m.kz || 0) < -0.1) {
+      S.put(); debris.spawn(player.p[0], player.p[1] + 1.2, player.p[2], '#e8e8f0', 7, 0.7);
+      if (inv.wear(inv.main, inv.sel, 1)) { S.brk('wood'); feed('盾が壊れた'); }
+      player.push((m.kx || 0) * 2, (m.kz || 0) * 2, 1.5);
+      return;
+    }
+  }
   const red = Math.min(0.8, inv.armorPoints() * 0.04);
   hurt(m.dmg * (1 - red), m.by, m.w);
   for (let i = 0; i < 4; i++) if (inv.armor[i]) inv.wear(inv.armor, i, 1);
@@ -404,7 +435,7 @@ function hurt(dmg, by, weapon, cause) {
   if (hp <= 0) die(cause);
 }
 function die(cause) {
-  dead = true; S.death(); gui.close(); bowCharge = -1; eatT = -1;
+  dead = true; S.death(); guiClose(); bowCharge = -1; eatT = -1;
   const killer = lastAttacker && performance.now() - lastAttackerAt < 8000 ? lastAttacker : null;
   const p = player.p;
   for (const st of inv.all()) spawnItem(st, [p[0], p[1] + 1, p[2]], [(Math.random() - 0.5) * 5, 2 + Math.random() * 3, (Math.random() - 0.5) * 5]);
@@ -441,14 +472,14 @@ function onDied(m) {
   if (m.killer === myId) S.kill();
   const o = others.get(m.id); if (o) debris.spawn(o.p[0], o.p[1] + 0.5, o.p[2], P ? P.color : '#fff', 18, 1.2);
 }
-// 満腹度（走る・跳ぶ・攻撃・被弾で減り、18以上で自然回復）
-// 試合は10分しかないので、動いて減る分はマイクラの3倍。じっとしていても少しずつ減る
+// 満腹度（走る・跳ぶ・攻撃・被弾で減り、満腹のときだけ体力が回復する）
+// 試合は10分しかないので、動いて減る分は3倍の速さ。じっとしていても少しずつ減る
 const HUNGER = 3;
 function tickFood(dt) {
   if (gameT() >= 0 && !player.para) exhaust += 0.02 * HUNGER * dt;
   if (exhaust >= 4) { exhaust -= 4; if (sat > 0) sat = Math.max(0, sat - 1); else food = Math.max(0, food - 1); renderStats(); }
   regenT += dt;
-  if (food >= 18 && hp < 20 && regenT > (sat > 0 && food >= 20 ? 1.5 : 4)) { regenT = 0; hp = Math.min(20, hp + 1); exhaust += 6; renderStats(); }
+  if (food >= 20 && hp < 20 && regenT > (sat > 0 ? 1.5 : 4)) { regenT = 0; hp = Math.min(20, hp + 1); exhaust += 6; renderStats(); } // 満腹のときだけ回復する
   else if (food === 0 && regenT > 4) { regenT = 0; if (hp > 1) hurt(1, null, null, 'hunger'); }
 }
 
@@ -501,8 +532,10 @@ $('tInv').onclick = () => { if (gui.open) closeGui(); else if (!dead && !spectat
 $('tDrop').onclick = () => { const st = inv.takeHeld(1); if (st) throwStack(st); };
 
 // ---------- 持ち物・作業台・かまど ----------
+// 宝箱を開けたまま閉じるときは、残りを部屋主に返す
+function guiClose() { if (gui.kind === 'chest' && gui.box) toHost({ t: 'chestSet', k: gui.box.k, slots: gui.box.slots }); gui.close(); }
 function openGui(kind, F = null) { gui.show(kind, F); document.exitPointerLock?.(); mouseL = mouseR = false; $('tClose').hidden = !mobile; }
-function closeGui() { gui.close(); renderHotbar(); lockPointer(); $('tClose').hidden = true; }
+function closeGui() { guiClose(); renderHotbar(); lockPointer(); $('tClose').hidden = true; }
 $('tClose').onclick = () => closeGui();
 function furnaceAt(x, y, z) { const k = `${x},${y},${z}`; if (!furnaces.has(k)) furnaces.set(k, { slots: [null, null, null], burn: 0, burnMax: 0, prog: 0, k }); return furnaces.get(k); }
 function tickFurnaces(dt) {
@@ -518,7 +551,7 @@ function tickFurnaces(dt) {
   }
 }
 
-// ---------- HUD（マイクラの体力・防具・満腹度） ----------
+// ---------- HUD（体力・防具・満腹度） ----------
 function iconURL(rows, pal) { const c = document.createElement('canvas'); c.width = c.height = 9; const g = c.getContext('2d'); rows.forEach((r, y) => [...r].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } })); return c.toDataURL(); }
 const HEART = ['.xx...xx.', 'xAAx.xAAx', 'xAAAxAAAx', 'xAAAAAAAx', '.xAAAAAx.', '..xAAAx..', '...xAx...', '....x....'];
 const ARMR = ['.xxx.xxx.', 'xAAAxAAAx', 'xAAAAAAAx', 'xAAAAAAAx', '.xAAAAAx.', '.xAAAAAx.', '.xAAAAAx.', '..xxxxx..'];
@@ -533,13 +566,15 @@ function renderStats() {
   row($('hearts'), Math.ceil(hp), ICONS.h); const ap = inv.armorPoints(); $('armorRow').style.visibility = ap ? 'visible' : 'hidden'; row($('armorRow'), ap, ICONS.a); row($('food'), food, ICONS.f, true);
   $('hearts').classList.toggle('low', hp <= 4);
 }
-let nameT = 0;
+let nameT = 0, bowTold = false, shieldTold = false;
 function renderHotbar() {
   const hb = $('hotbar'); hb.innerHTML = '';
   for (let i = 0; i < HOT; i++) { const d = document.createElement('div'); d.className = 'hslot' + (i === inv.sel ? ' on' : ''); gui.fillSlot(d, inv.main[i]); d.onpointerdown = e => { e.stopPropagation(); selectSlot(i); }; hb.appendChild(d); }
   const h = inv.held(), name = h ? ITEMS[h.id].name : '';
   if ($('itemname').textContent !== name) { $('itemname').textContent = name; nameT = 2.5; }
-  $('tUse').textContent = !h ? '使う' : ITEMS[h.id].block ? '置く' : ITEMS[h.id].food ? '食べる' : ITEMS[h.id].bow ? '引く' : '使う';
+  $('tUse').textContent = !h ? '使う' : ITEMS[h.id].block ? '置く' : ITEMS[h.id].food ? '食べる' : ITEMS[h.id].bow ? '引く' : ITEMS[h.id].shield ? 'かまえる' : '使う';
+  if (h && ITEMS[h.id].bow && !bowTold) { bowTold = true; feed('<b>弓</b>：右クリックを押している間ひきしぼり、離すと矢が飛びます（矢が必要・長く引くほど強い）'); }
+  if (h && ITEMS[h.id].shield && !shieldTold) { shieldTold = true; feed('<b>盾</b>：右クリックを押している間かまえます。正面から来る攻撃を防げます'); }
   renderStats(); updateFP();
 }
 function renderBoard() {
@@ -555,7 +590,7 @@ function zoneC() { return room?.zone || [WS / 2, WS / 2]; }
 function zoneDmg() { return 1 + Math.max(0, gameT() - SHRINK) / 120; }
 let out = false;
 
-// ---------- 一人称の手元（マイクラの腕振り） ----------
+// ---------- 一人称の手元（腕振り） ----------
 const fpRoot = new THREE.Group(); R.fpScene.add(fpRoot);
 let myChute = makeParachute('#e84a3a'); myChute.visible = false; R.scene.add(myChute);
 const myTrail = new Trail(R.scene, '#ffffff');
@@ -583,6 +618,7 @@ function animFP(dt) {
   fpRoot.rotation.set(-Math.sin(sq * PI) * 1.1 + (kind === 'arm' ? -0.1 : 0), -Math.sin(f * f * PI) * 0.35 + (kind === 'arm' ? -0.25 : 0), -Math.sin(sq * PI) * 0.3);
   if (bowCharge >= 0) { fpRoot.position.set(0.16, -0.3, -0.46 + bowCharge * 0.06); fpRoot.rotation.set(0.05, -0.15, -0.55); }
   if (eatT >= 0) { fpRoot.position.set(0.1, -0.3 + Math.abs(Math.sin(eatT * 18)) * 0.04, -0.4); fpRoot.rotation.set(0.35, -0.6, 0.2); }
+  if (blocking) { fpRoot.position.set(0.3, -0.34, -0.42); fpRoot.rotation.set(0.1, -0.45, -0.15); }
 }
 
 // ---------- 掘る・攻撃・置く・食べる・弓 ----------
@@ -591,7 +627,7 @@ const sel = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry
 const crackTex = crackCanvases().map(c => { const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; return t; });
 const crack = new THREE.Mesh(new THREE.BoxGeometry(1.006, 1.006, 1.006), new THREE.MeshBasicMaterial({ map: crackTex[0], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
 R.scene.add(sel, crack); crack.visible = false;
-// マイクラの採掘時間：ダメージ＝速さ÷硬さ÷(取れるなら30、取れないなら100)。1ティック＝1/20秒
+// 採掘時間：ダメージ＝速さ÷硬さ÷(取れるなら30、取れないなら100)。1ティック＝1/20秒
 function breakTime(b) {
   const d = BLOCKS[b], it = ITEMS[inv.held()?.id];
   if (d.hard === Infinity) return Infinity;
@@ -614,6 +650,8 @@ function targetPlayer(maxD) {
 function attackCharge() { const cool = ITEMS[inv.held()?.id]?.cool || 0.25; return Math.min(1, (performance.now() - lastAtk) / 1000 / cool); }
 function actions(dt) {
   const h = inv.held(), it = h && ITEMS[h.id];
+  const holdUse = mouseR || T.use;
+  blocking = !!(it?.shield && holdUse); // 盾をかまえている間は、正面からの攻撃を防ぐ
   const hit = raycast(world, player.eye(), player.dir(), 4.5);
   if (hit) { sel.visible = true; sel.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5); } else sel.visible = false;
   // 攻撃（振りのため時間でダメージが変わる。落下中はクリティカル）
@@ -665,8 +703,12 @@ function actions(dt) {
   // 使う
   if (usePress) {
     usePress = false;
-    if (hit && (hit.b === B.table || hit.b === B.furnace) && !(player.input.sneak && it?.block)) {
-      swing(); if (hit.b === B.table) openGui('table'); else openGui('furnace', furnaceAt(hit.x, hit.y, hit.z)); return;
+    if (hit && (hit.b === B.table || hit.b === B.furnace || hit.b === B.chest) && !(player.input.sneak && it?.block)) {
+      swing();
+      if (hit.b === B.table) openGui('table');
+      else if (hit.b === B.chest) { S.put(); toHost({ t: 'chestOpen', k: `${hit.x},${hit.y},${hit.z}` }); }
+      else openGui('furnace', furnaceAt(hit.x, hit.y, hit.z));
+      return;
     }
     if (it?.bow) { if (inv.count('arrow') > 0) bowCharge = 0; else feed('矢がありません'); }
     else if (it?.food) { if (food < 20) eatT = 0; else feed('おなかがいっぱいです'); }
@@ -677,10 +719,9 @@ function actions(dt) {
       }
     }
   }
-  const holdUse = mouseR || T.use;
   if (eatT >= 0) {
     if (!holdUse || !it?.food) eatT = -1;
-    else { eatT += dt; player.slow = 0.35; if (Math.floor((eatT - dt) / 0.25) !== Math.floor(eatT / 0.25)) S.chew(); if (eatT >= 1.6) { food = Math.min(20, food + it.food); sat = Math.min(food, sat + 2.4); inv.takeHeld(1); eatT = -1; S.eat(); renderStats(); } }
+    else { eatT += dt; player.slow = 0.35; if (Math.floor((eatT - dt) / 0.25) !== Math.floor(eatT / 0.25)) S.chew(); if (eatT >= 1.6) { food = Math.min(20, food + it.food); sat = Math.min(food, sat + (it.sat ?? 2.4)); inv.takeHeld(1); eatT = -1; S.eat(); renderStats(); } }
     if (eatT < 0) player.slow = 1;
   }
   if (bowCharge >= 0) {
@@ -697,6 +738,7 @@ function actions(dt) {
       bowCharge = -1; player.slow = 1; $('bowbar').hidden = true;
     }
   }
+  if (eatT < 0 && bowCharge < 0) player.slow = blocking ? 0.5 : 1;
 }
 function overlapsAnyone(x, y, z) {
   const hb = p => x + 1 > p[0] - PW && x < p[0] + PW && y + 1 > p[1] && y < p[1] + PH && z + 1 > p[2] - PW && z < p[2] + PW;
@@ -762,7 +804,7 @@ function frame(t) {
     } else if (!dead) {
       if (tg < 0) { player.v = [0, 0, 0]; acc = 0; } else acc += dt;
       while (acc >= DT) { acc -= DT; const x0 = player.p[0], z0 = player.p[2]; player.step(DT); player.stepHook(); if (player.sprinting) exhaust += Math.hypot(player.p[0] - x0, player.p[2] - z0) * 0.1 * HUNGER; }
-      if (!open && !player.para) actions(dt); else { crack.visible = false; sel.visible = false; }
+      if (!open && !player.para) actions(dt); else { crack.visible = false; sel.visible = false; blocking = false; }
       tickFood(dt);
       const zc = zoneC(); out = Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]) > borderR();
       if (out && !player.para) { borderDmgT += dt; if (borderDmgT > 1) { borderDmgT = 0; hurt(zoneDmg(), null, null, 'border'); } }
@@ -773,7 +815,7 @@ function frame(t) {
     posT += dt;
     if (posT > 1 / 15 && !spectator && !solo) {
       posT = 0; const h = inv.held();
-      toAll({ t: 'pos', p: player.p.map(v => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), held: h?.id || null, hp: Math.round(hp * 2) / 2, dead, sw: swingSent, sn: player.input.sneak, pa: !!player.para });
+      toAll({ t: 'pos', p: player.p.map(v => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), held: h?.id || null, hp: Math.round(hp * 2) / 2, dead, sw: swingSent, sn: player.input.sneak, pa: !!player.para, bl: blocking });
       swingSent = false;
     }
     for (const [id, o] of others) {
@@ -790,6 +832,7 @@ function frame(t) {
       else if (o.trail.pts.length) o.trail.clear();
       animateCharacter(o.model, o.chute.visible ? 0 : Math.hypot(o.p[0] - prev[0], o.p[2] - prev[2]) / Math.max(dt, 1e-3), dt, o.swing > 0 ? Math.sin(Math.sqrt(o.swing) * Math.PI) : 0);
       if (o.chute.visible) { o.model.userData.armL.rotation.x = o.model.userData.armR.rotation.x = -2.6; }
+      else if (o.blocking && !o.dead) { o.model.userData.armL.rotation.x = o.model.userData.armR.rotation.x = -1.3; }
     }
     updateArrows(dt);
     // カメラ（被弾で傾く・走ると視野が広がる）
@@ -838,7 +881,7 @@ function frame(t) {
     else if (out && !spectator) { const zc = zoneC(); ph.textContent = `安全地帯の外！ 中心まで${Math.round(Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]))}m`; ph.className = 'phase danger'; }
     else { ph.textContent = '安全地帯が縮小中'; ph.className = 'phase border'; }
     if (player.para && !spectator) { ph.textContent = tg < 0 ? 'まもなく降下' : 'パラシュート降下中（マウスで向き・WASDで移動）'; ph.className = 'phase'; }
-    if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); }
+    if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); feed('島のどこかに<b>宝箱が2つ</b>あります（見つけにくい所にあります）'); }
     if (tg >= SAFE && !announced.fight) { announced.fight = true; S.gong(); feed('<b>戦闘開始！</b>'); }
     if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed('<b>安全地帯が縮み始めた！</b> 赤い壁の外にいると体力が減ります'); }
     R.border.position.x = zoneC()[0]; R.border.position.z = zoneC()[1]; R.setBorder(tg >= SHRINK ? borderR() : 999); R.setDay(Math.max(0, Math.min(1, tg / DUR)));
@@ -865,7 +908,7 @@ setInterval(() => { if (isHost && room?.phase === 'game' && gameT() >= DUR) endM
 
 // ---------- 結果 ----------
 function showResult() {
-  state = 'result'; show('result'); document.exitPointerLock?.(); $('hud').hidden = true; gui.close();
+  state = 'result'; show('result'); document.exitPointerLock?.(); $('hud').hidden = true; guiClose();
   // 順位：ドン勝 → 時間切れで生き残った人 → 脱落が遅かった順
   const alive = Object.keys(room.alive || {}).filter(id => id !== room.winner).sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
   const order = [...(room.winner ? [room.winner] : []), ...alive, ...[...(room.elim || [])].reverse()].filter((id, i, arr) => arr.indexOf(id) === i && room.players[id]);

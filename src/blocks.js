@@ -41,6 +41,9 @@ def('table_side', t => { t.fill([150, 112, 66], 8); t.rect(0, 0, 16, 3, [110, 80
 def('furnace_side', t => { T.cobble.px.forEach((v, i) => t.px[i] = v); });
 def('furnace_front', t => { T.cobble.px.forEach((v, i) => t.px[i] = v); t.rect(4, 8, 8, 5, [30, 26, 24]); t.rect(5, 10, 6, 2, [240, 140, 40], 20); t.rect(4, 3, 8, 2, [70, 70, 70]); });
 
+def('chest_top', t => { t.fill([150, 106, 58], 8); t.rect(0, 0, 16, 1, [96, 66, 34]); t.rect(0, 15, 16, 1, [96, 66, 34]); t.rect(0, 0, 1, 16, [96, 66, 34]); t.rect(15, 0, 1, 16, [96, 66, 34]); for (let y = 2; y < 14; y += 4) t.rect(1, y, 14, 1, [122, 84, 44]); t.rect(6, 0, 4, 3, [110, 92, 40]); t.rect(7, 0, 2, 2, [196, 168, 70]); });
+def('chest_front', t => { t.fill([150, 106, 58], 8); t.rect(0, 0, 16, 1, [96, 66, 34]); t.rect(0, 15, 16, 1, [96, 66, 34]); t.rect(0, 0, 1, 16, [96, 66, 34]); t.rect(15, 0, 1, 16, [96, 66, 34]); t.rect(1, 5, 14, 1, [96, 66, 34]); t.rect(1, 6, 14, 1, [122, 84, 44]); t.rect(6, 4, 4, 5, [110, 92, 40]); t.rect(7, 6, 2, 3, [60, 46, 22]); t.rect(7, 4, 2, 2, [214, 188, 90]); });
+def('shield', t => t.clear().art(['....wwwwwwww....', '...wWWWWWWWWw...', '..wWWWWWWWWWWw..', '..wWWrrrrrrWWw..', '..wWWrRRRRrWWw..', '..wWWrRiiRrWWw..', '..wWWrRiiRrWWw..', '..wWWrRRRRrWWw..', '..wWWrrrrrrWWw..', '..wWWWWWWWWWWw..', '...wWWWWWWWWw...', '....wWWWWWWw....', '.....wWWWWw.....', '......wWWw......', '.......ww.......', '................'], { w: [92, 64, 34], W: [150, 106, 58], r: [120, 84, 44], R: [196, 60, 50], i: [232, 232, 240] }));
 def('gravel', t => { t.fill([150, 138, 130], 10); for (let i = 0; i < 46; i++) { const x = t.r() * 15 | 0, y = t.r() * 15 | 0, c = [[104, 94, 90], [186, 176, 168], [130, 112, 100], [96, 104, 110]][t.r() * 4 | 0]; t.rect(x, y, 2, 2, c, 8); } });
 def('glass', t => { t.clear(); for (let i = 0; i < TS; i++) { t.set(i, 0, [220, 240, 250], 230); t.set(i, 15, [220, 240, 250], 230); t.set(0, i, [220, 240, 250], 230); t.set(15, i, [220, 240, 250], 230); } for (let i = 3; i < 7; i++) t.set(i, 9 - i, [255, 255, 255], 200); for (let i = 9; i < 12; i++) t.set(i, 20 - i, [255, 255, 255], 200); });
 def('cobweb', t => { t.clear(); const c = [236, 236, 240]; for (let i = 0; i < 16; i++) { t.set(i, i, c, 220); t.set(15 - i, i, c, 220); t.set(8, i, c, 200); t.set(i, 8, c, 200); } for (const r of [3, 6]) for (let a = 0; a < 40; a++) t.set(8 + Math.round(Math.cos(a / 40 * 6.283) * r), 8 + Math.round(Math.sin(a / 40 * 6.283) * r), c, 190); });
@@ -85,7 +88,7 @@ function shadeItem(t) {
     for (let c = 0; c < 3; c++) t.px[i + c] = Math.min(255, src[i + c] * k);
   }
 }
-for (const n of Object.keys(T)) if (/^(sword|pick|axe|shovel|helmet|chest|legs|boots)_|^(stick|coal|iron|diamond|flint|apple|bow|arrow|string)$/.test(n)) shadeItem(T[n]);
+for (const n of Object.keys(T)) if (/^(sword|pick|axe|shovel|helmet|chest|legs|boots)_|^(stick|coal|iron|diamond|flint|apple|bow|arrow|string|shield)$/.test(n)) shadeItem(T[n]);
 def('border', t => { for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) t.set(x, y, [255, 60, 60], ((x + y) % 8 < 3) ? 150 : 40); });
 
 // ---- ブロック ----
@@ -94,7 +97,7 @@ function block(name, faces, o = {}) {
   const id = BLOCKS.length; const f = typeof faces === 'string' ? [faces, faces, faces] : faces;
   BLOCKS.push({ id, name, faces: f, solid: true, cut: false, water: false, hard: 1, tool: null, level: 0, drop: name, sound: 'stone', ...o }); B[name] = id; return id;
 }
-// hard：マイクラの硬さ、tool：適した道具、level：必要な道具の段階（1木 2石 3鉄）
+// hard：硬さ、tool：適した道具、level：必要な道具の段階（1木 2石 3鉄）
 block('bedrock', 'bedrock', { hard: Infinity });
 block('stone', 'stone', { hard: 1.5, tool: 'pick', level: 1, drop: 'cobble' });
 block('dirt', 'dirt', { hard: 0.5, tool: 'shovel', sound: 'dirt' });
@@ -116,6 +119,7 @@ block('glass', 'glass', { cut: true, hard: 0.3, drop: null, sound: 'glass' });
 block('tallgrass', 'tallgrass', { cut: true, solid: false, web: true, plant: true, hard: 0, drop: null, sound: 'grass' });
 block('flower_red', 'flower_red', { cut: true, solid: false, web: true, plant: true, hard: 0, drop: null, sound: 'grass' });
 block('flower_yellow', 'flower_yellow', { cut: true, solid: false, web: true, plant: true, hard: 0, drop: null, sound: 'grass' });
+block('chest', ['chest_top', 'chest_front', 'chest_top'], { hard: Infinity, sound: 'wood' }); // 島に2つだけ置く宝箱。壊せない
 block('cobweb', 'cobweb', { cut: true, solid: false, web: true, hard: 4, tool: 'sword', drop: 'string', needTool: true, sound: 'grass' });
 
 // ---- アイテム ----
@@ -123,9 +127,10 @@ export const ITEMS = {};
 function item(id, name, icon, o = {}) { ITEMS[id] = { id, name, icon, stack: 64, ...o }; }
 for (const [id, name, icon] of [['dirt', '土', 'grass_side'], ['cobble', '丸石', 'cobble'], ['stone', '石', 'stone'], ['sand', '砂', 'sand'], ['gravel', '砂利', 'gravel'], ['log', '原木', 'log_side'], ['planks', '木材', 'planks'], ['table', '作業台', 'table_side'], ['furnace', 'かまど', 'furnace_front'], ['iron_ore', '鉄鉱石', 'iron_ore'], ['glass', 'ガラス', 'glass']]) item(id, name, icon, { block: id });
 item('stick', '棒', 'stick'); item('coal', '石炭', 'coal'); item('iron', '鉄インゴット', 'iron'); item('diamond', 'ダイヤ', 'diamond');
-item('flint', '火打石', 'flint'); item('string', '糸', 'string'); item('apple', 'りんご', 'apple', { food: 4 });
+item('flint', '火打石', 'flint'); item('string', '糸', 'string'); item('apple', 'りんご', 'apple', { food: 20, sat: 5 }); // 1個で満腹になり、そのあとハート2個ぶん回復する
+item('shield', '盾', 'shield', { stack: 1, shield: true, dur: 336 });
 item('arrow', '矢', 'arrow'); item('bow', '弓', 'bow', { stack: 1, bow: true, dur: 384 });
-// 道具：[名前, 段階, 速さ, 耐久, 剣の攻撃力]（マイクラの値）
+// 道具：[名前, 段階, 速さ, 耐久, 剣の攻撃力]
 export const MATS = { w: ['木', 1, 2, 59, 4], s: ['石', 2, 4, 131, 5], i: ['鉄', 3, 6, 250, 6], d: ['ダイヤ', 4, 8, 1561, 7] };
 for (const [m, [jp, lv, spd, dur, sw]] of Object.entries(MATS)) {
   item(`sword_${m}`, `${jp}の剣`, `sword_${m}`, { stack: 1, dmg: sw, dur, tool: 'sword', level: lv, speed: 1.5, cool: 0.625 });
@@ -148,6 +153,7 @@ export const RECIPES = [
   { out: 'bow', n: 1, p: [' SX', 'S X', ' SX'], k: { S: 'stick', X: 'string' } },
   { out: 'arrow', n: 4, p: ['F', 'S', 'X'], k: { F: 'flint', S: 'stick', X: 'string' } },
   { out: 'arrow', n: 4, p: ['F', 'S'], k: { F: 'flint', S: 'stick' } },
+  { out: 'shield', n: 1, p: ['PIP', 'PPP', ' P '], k: { P: 'planks', I: 'iron' } },
 ];
 const MATKEY = { w: 'planks', s: 'cobble', i: 'iron', d: 'diamond' };
 for (const [m, key] of Object.entries(MATKEY)) {
@@ -165,7 +171,7 @@ for (const [m, key] of [['i', 'iron'], ['d', 'diamond']]) {
 // かまど：精錬と燃料（燃える秒数）
 export const SMELT = { iron_ore: 'iron', sand: 'glass', cobble: 'stone', log: 'coal' };
 export const FUEL = { coal: 80, log: 15, planks: 15, stick: 5, table: 15 };
-export const SMELT_TIME = 5; // 1個あたり（マイクラは10秒。10分の試合なので短め）
+export const SMELT_TIME = 5; // 1個あたり（10分の試合なので短め）
 
 // 並べた材料（w×h の配列、空は null）に合うレシピ
 export function matchRecipe(grid, w, h) {

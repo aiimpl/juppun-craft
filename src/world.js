@@ -133,6 +133,37 @@ export class World {
       const q = r();
       if (q < 0.1) put(x, h + 1, z, B.tallgrass); else if (q < 0.112) put(x, h + 1, z, B.flower_red); else if (q < 0.124) put(x, h + 1, z, B.flower_yellow);
     }
+    this.chests = this.placeChests(r, hm);
+  }
+  // 宝箱を2つだけ、見つけにくい場所に置く（洞窟の奥と、木のしげみの下）
+  placeChests(r, hm) {
+    const out = [], far = (x, z) => out.every(c => Math.hypot(c[0] - x, c[2] - z) > 45);
+    const floor = (x, y, z) => { const b = this.get(x, y - 1, z); return b && BLOCKS[b].solid && b !== B.leaves; };
+    const free = (x, y, z) => !this.get(x, y, z) && !this.get(x, y + 1, z);
+    // 1つめ：洞窟の中（地表から見えない深さ）
+    for (let k = 0; k < 8000 && !out.length; k++) {
+      const x = 6 + (r() * (WS - 12) | 0), z = 6 + (r() * (WS - 12) | 0), h = hm[z * WS + x];
+      if (h < SEA + 6) continue;
+      const y = 6 + (r() * Math.max(1, h - 12) | 0);
+      if (y > h - 5 || !free(x, y, z) || !floor(x, y, z)) continue;
+      out.push([x, y, z]);
+    }
+    // 2つめ：葉におおわれた木のしげみの下（上空からは見えない）
+    for (let k = 0; k < 20000 && out.length < 2; k++) {
+      const x = 4 + (r() * (WS - 8) | 0), z = 4 + (r() * (WS - 8) | 0), h = hm[z * WS + x];
+      if (this.get(x, h, z) !== B.grass || this.get(x, h + 1, z) || !far(x, z)) continue;
+      let leaf = false; for (let y = h + 2; y < h + 9 && !leaf; y++) if (this.get(x, y, z) === B.leaves) leaf = true;
+      if (!leaf) continue;
+      out.push([x, h + 1, z]);
+    }
+    // 見つからなければ、島のどこかの地面に置く
+    for (let k = 0; k < 4000 && out.length < 2; k++) {
+      const x = 8 + (r() * (WS - 16) | 0), z = 8 + (r() * (WS - 16) | 0), h = hm[z * WS + x];
+      if (h <= SEA + 1 || this.get(x, h + 1, z) || !far(x, z)) continue;
+      out.push([x, h + 1, z]);
+    }
+    for (const [x, y, z] of out) this.data[this.idx(x, y, z)] = B.chest;
+    return out;
   }
   // パラシュートで降りる地点：島の四隅の上空
   corner(i) { const a = (i % 4) * Math.PI / 2 + Math.PI / 4, rr = WS * 0.31; return [WS / 2 + Math.cos(a) * rr, 78, WS / 2 + Math.sin(a) * rr]; }

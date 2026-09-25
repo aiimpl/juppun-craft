@@ -85,7 +85,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .bowbar{position:absolute;left:50%;top:calc(50% + 24px);width:60px;height:5px;margin-left:-30px;background:rgba(0,0,0,.5);border-radius:3px;overflow:hidden}
 .bowbar i{display:block;height:100%;background:#fff;width:0}
 .spect{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--glass2);border-radius:10px;padding:8px 14px;font-size:14px}
-/* マイクラ風の持ち物画面 */
+/* 持ち物画面 */
 .guiBack{background:rgba(0,0,0,.55);z-index:20}
 .gui{position:relative;background:#c6c6c6;border-radius:calc(var(--k)*3px);box-shadow:inset calc(var(--k)*2px) calc(var(--k)*2px) 0 #fff,inset calc(var(--k)*-2px) calc(var(--k)*-2px) 0 #555,0 0 0 calc(var(--k)*1px) #000;color:#404040;image-rendering:pixelated}
 .guiLabel{position:absolute;font-size:calc(var(--k)*6.5px);font-family:var(--pix);color:#404040;white-space:nowrap}
@@ -108,7 +108,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .cursorItem .gslot{position:relative;background:none;box-shadow:none}
 .tclose{position:fixed;right:12px;top:calc(max(10px,env(safe-area-inset-top)));z-index:25;border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:#1d2229;font-weight:800}
 .notice{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:70;background:rgba(16,18,22,.94);border:2px solid rgba(255,255,255,.2);border-radius:12px;padding:18px 22px;max-width:90vw;text-align:center;line-height:1.7}
-/* マイクラ風の HUD */
+/* HUD */
 .icons{display:flex;height:18px}.icons i{width:18px;height:18px;margin-right:-1px;background-size:cover;image-rendering:pixelated}
 #hearts.low i{animation:shake .3s infinite}
 @keyframes shake{50%{transform:translateY(-1px)}}
@@ -202,7 +202,8 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
   <div class="center" id="centerMsg" hidden><div class="big" id="bigMsg"></div><div id="smallMsg"></div></div>
   <div class="hint" id="hint" hidden>
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> ジャンプ　<kbd>E</kbd> 持ち物（2×2クラフト）　作業台・かまどは右クリックで開く　<kbd>1</kbd>〜<kbd>9</kbd> 持ち替え<br>
-    左クリック 掘る・攻撃　右クリック 置く・使う・食べる・弓を引く　<kbd>Q</kbd> 捨てる　<kbd>Shift</kbd> しゃがむ　<kbd>Ctrl</kbd>を押している間 走る
+    左クリック 掘る・攻撃　右クリック 置く・使う・食べる　<kbd>Q</kbd> 捨てる　<kbd>Shift</kbd> しゃがむ　<kbd>Ctrl</kbd>を押している間 走る<br>
+    弓：矢を持った状態で右クリックを押してひきしぼり、離すと飛ぶ　盾：右クリックでかまえる　宝箱：島に2つ（右クリックで開く）
   </div>
   <div class="touch" id="touch" hidden>
     <div class="stick" id="stick"><i></i></div>
