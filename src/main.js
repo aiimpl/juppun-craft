@@ -400,7 +400,7 @@ function hurt(dmg, by, weapon, cause) {
   hp = Math.max(0, hp - dmg); lastHurt = performance.now(); hurtRoll = 1; hurtDir = Math.random() < 0.5 ? -1 : 1;
   if (by) { lastAttacker = by; lastAttackerAt = performance.now(); lastWeapon = weapon; }
   $('hurt').classList.add('on'); setTimeout(() => $('hurt').classList.remove('on'), 120);
-  S.hurt(); exhaust += 0.1; renderStats();
+  S.hurt(); exhaust += 0.1 * HUNGER; renderStats();
   if (hp <= 0) die(cause);
 }
 function die(cause) {
@@ -442,7 +442,10 @@ function onDied(m) {
   const o = others.get(m.id); if (o) debris.spawn(o.p[0], o.p[1] + 0.5, o.p[2], P ? P.color : '#fff', 18, 1.2);
 }
 // 満腹度（走る・跳ぶ・攻撃・被弾で減り、18以上で自然回復）
+// 試合は10分しかないので、動いて減る分はマイクラの3倍。じっとしていても少しずつ減る
+const HUNGER = 3;
 function tickFood(dt) {
+  if (gameT() >= 0 && !player.para) exhaust += 0.02 * HUNGER * dt;
   if (exhaust >= 4) { exhaust -= 4; if (sat > 0) sat = Math.max(0, sat - 1); else food = Math.max(0, food - 1); renderStats(); }
   regenT += dt;
   if (food >= 18 && hp < 20 && regenT > (sat > 0 && food >= 20 ? 1.5 : 4)) { regenT = 0; hp = Math.min(20, hp + 1); exhaust += 6; renderStats(); }
@@ -625,7 +628,7 @@ function actions(dt) {
       if (crit) { dmg *= 1.5; debris.spawn(o.p[0], o.p[1] + 1.2, o.p[2], '#ffe070', 12, 0.9); }
       const kb = (player.sprinting && ch > 0.9 ? 1.7 : 1) * (0.4 + ch * 0.6);
       toHost({ t: 'hit', target: tp.id, dmg: +dmg.toFixed(2), kx: dir[0] / L, kz: dir[2] / L, kb, w: h?.id || null, crit });
-      S.hit(); exhaust += 0.1; o.hurtT = 0.3;
+      S.hit(); exhaust += 0.1 * HUNGER; o.hurtT = 0.3;
       if (it?.dur) inv.wear(inv.main, inv.sel, it.tool === 'sword' ? 1 : 2);
       if (player.sprinting && ch > 0.9) player.sprinting = false;
       if (gameT() < SAFE) feed('準備時間中は攻撃できません');
@@ -647,11 +650,11 @@ function actions(dt) {
         world.set(hit.x, hit.y, hit.z, 0);
         const up = world.get(hit.x, hit.y + 1, hit.z); if (up && BLOCKS[up].plant) world.set(hit.x, hit.y + 1, hit.z, 0); // 足場を失った草花
         R.updateDirty(world);
-        breakParticles(hit.x, hit.y, hit.z, hit.b); S.brk(d.sound); exhaust += 0.005;
+        breakParticles(hit.x, hit.y, hit.z, hit.b); S.brk(d.sound); exhaust += 0.005 * HUNGER;
         if (canHarvest(hit.b)) {
           let drop = d.drop;
           if (hit.b === B.gravel && Math.random() < 0.1) drop = 'flint';
-          if (hit.b === B.leaves && Math.random() < 0.05) drop = 'apple';
+          if (hit.b === B.leaves && Math.random() < 0.08) drop = 'apple';
           if (drop) dropFromBlock(drop, hit.x, hit.y, hit.z);
         }
         if (it?.dur && d.hard > 0 && inv.wear(inv.main, inv.sel, it.tool && it.tool !== 'sword' ? 1 : 2)) { S.brk('wood'); feed(`${it.name}が壊れた`); }
@@ -725,14 +728,14 @@ function updateArrows(dt) {
 }
 function hookPlayer() {
   let lastStep = 0;
-  player.onJump = () => { S.jump(); exhaust += player.sprinting ? 0.2 : 0.05; };
+  player.onJump = () => { S.jump(); exhaust += (player.sprinting ? 0.2 : 0.05) * HUNGER; };
   player.onLand = v => { if (v > 6) S.land(v); };
   player.onFall = n => { if (gameT() >= 0) hurt(n, null, null, 'fall'); };
   player.stepHook = () => { if (player.walkDist - lastStep > 1.7 && player.onGround && !player.input.sneak) { lastStep = player.walkDist; const b = world.get(Math.floor(player.p[0]), Math.floor(player.p[1] - 0.1), Math.floor(player.p[2])); if (b) S.step(BLOCKS[b].sound); } };
 }
 
 // ---------- 毎フレーム ----------
-let last = performance.now(), acc = 0, fpsN = 0, fpsT = 0, borderDmgT = 0, fov = 75;
+let hungryMsgT = 0, last = performance.now(), acc = 0, fpsN = 0, fpsT = 0, borderDmgT = 0, fov = 75;
 const announced = {};
 function frame(t) {
   requestAnimationFrame(frame);
@@ -747,7 +750,10 @@ function frame(t) {
       I.s = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + T.mx;
       I.jump = keys.has('Space') || T.jump;
       I.sneak = keys.has('ShiftLeft') || keys.has('ShiftRight') || T.sneak;
-      I.run = (keys.has('ControlLeft') || sprintTap || Math.hypot(T.mx, T.my) > 0.92) && food > 6;
+      // 走るのは、Ctrl（または W 2回押し・スティックを奥まで）を押している間だけ。満腹度が3以下だと走れない
+      const wantRun = keys.has('ControlLeft') || keys.has('ControlRight') || sprintTap || Math.hypot(T.mx, T.my) > 0.92;
+      I.run = wantRun && food > 6;
+      if (wantRun && food <= 6 && I.f > 0.3 && performance.now() - hungryMsgT > 8000) { hungryMsgT = performance.now(); feed('おなかが減って走れません。りんごを食べよう'); }
     }
     if (spectator) {
       const d = player.dir(), sp = keys.has('ControlLeft') ? 24 : 12, rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
@@ -755,7 +761,7 @@ function frame(t) {
       player.p[1] = Math.max(2, Math.min(80, player.p[1]));
     } else if (!dead) {
       if (tg < 0) { player.v = [0, 0, 0]; acc = 0; } else acc += dt;
-      while (acc >= DT) { acc -= DT; const x0 = player.p[0], z0 = player.p[2]; player.step(DT); player.stepHook(); if (player.sprinting) exhaust += Math.hypot(player.p[0] - x0, player.p[2] - z0) * 0.1; }
+      while (acc >= DT) { acc -= DT; const x0 = player.p[0], z0 = player.p[2]; player.step(DT); player.stepHook(); if (player.sprinting) exhaust += Math.hypot(player.p[0] - x0, player.p[2] - z0) * 0.1 * HUNGER; }
       if (!open && !player.para) actions(dt); else { crack.visible = false; sel.visible = false; }
       tickFood(dt);
       const zc = zoneC(); out = Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]) > borderR();

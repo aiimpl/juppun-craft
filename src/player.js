@@ -36,7 +36,7 @@ export class Player {
     this.inWater = this.w.get(Math.floor(p[0]), Math.floor(p[1] + 0.4), Math.floor(p[2])) === B.water;
     const wb = (y) => this.w.get(Math.floor(p[0]), Math.floor(p[1] + y), Math.floor(p[2])) === B.cobweb; // 草花は素通り
     this.inWeb = wb(0.1) || wb(1.2);
-    if (I.f <= 0.3 || I.sneak || this.inWater) this.sprinting = false; else if (I.run) this.sprinting = true;
+    this.sprinting = !!I.run && I.f > 0.3 && !I.sneak && !this.inWater; // 押している間だけ走る
     let fx = -Math.sin(this.yaw) * I.f + Math.cos(this.yaw) * I.s, fz = -Math.cos(this.yaw) * I.f - Math.sin(this.yaw) * I.s;
     const m = Math.hypot(fx, fz); if (m > 1) { fx /= m; fz /= m; }
     const sp = this.para ? 5.2 : (this.inWater ? SWIM : I.sneak ? SNEAK : this.sprinting ? RUN : WALK) * (this.slow || 1) * (this.inWeb ? 0.25 : 1);
