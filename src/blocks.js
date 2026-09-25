@@ -41,7 +41,7 @@ def('table_side', t => { t.fill([150, 112, 66], 8); t.rect(0, 0, 16, 3, [110, 80
 def('furnace_side', t => { T.cobble.px.forEach((v, i) => t.px[i] = v); });
 def('furnace_front', t => { T.cobble.px.forEach((v, i) => t.px[i] = v); t.rect(4, 8, 8, 5, [30, 26, 24]); t.rect(5, 10, 6, 2, [240, 140, 40], 20); t.rect(4, 3, 8, 2, [70, 70, 70]); });
 
-def('gravel', t => { t.fill([130, 124, 120], 18); for (let i = 0; i < 30; i++) { const x = t.r() * 15 | 0, y = t.r() * 15 | 0; t.rect(x, y, 2, 2, t.r() < 0.5 ? [96, 90, 88] : [168, 162, 156], 10); } });
+def('gravel', t => { t.fill([150, 138, 130], 10); for (let i = 0; i < 46; i++) { const x = t.r() * 15 | 0, y = t.r() * 15 | 0, c = [[104, 94, 90], [186, 176, 168], [130, 112, 100], [96, 104, 110]][t.r() * 4 | 0]; t.rect(x, y, 2, 2, c, 8); } });
 def('glass', t => { t.clear(); for (let i = 0; i < TS; i++) { t.set(i, 0, [220, 240, 250], 230); t.set(i, 15, [220, 240, 250], 230); t.set(0, i, [220, 240, 250], 230); t.set(15, i, [220, 240, 250], 230); } for (let i = 3; i < 7; i++) t.set(i, 9 - i, [255, 255, 255], 200); for (let i = 9; i < 12; i++) t.set(i, 20 - i, [255, 255, 255], 200); });
 def('cobweb', t => { t.clear(); const c = [236, 236, 240]; for (let i = 0; i < 16; i++) { t.set(i, i, c, 220); t.set(15 - i, i, c, 220); t.set(8, i, c, 200); t.set(i, 8, c, 200); } for (const r of [3, 6]) for (let a = 0; a < 40; a++) t.set(8 + Math.round(Math.cos(a / 40 * 6.283) * r), 8 + Math.round(Math.sin(a / 40 * 6.283) * r), c, 190); });
 

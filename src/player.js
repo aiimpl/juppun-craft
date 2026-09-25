@@ -39,14 +39,16 @@ export class Player {
     if (I.f <= 0.3 || I.sneak || this.inWater) this.sprinting = false; else if (I.run) this.sprinting = true;
     let fx = -Math.sin(this.yaw) * I.f + Math.cos(this.yaw) * I.s, fz = -Math.cos(this.yaw) * I.f - Math.sin(this.yaw) * I.s;
     const m = Math.hypot(fx, fz); if (m > 1) { fx /= m; fz /= m; }
-    const sp = (this.inWater ? SWIM : I.sneak ? SNEAK : this.sprinting ? RUN : WALK) * (this.slow || 1) * (this.inWeb ? 0.25 : 1);
-    const acc = this.onGround ? ACC_G : ACC_A;
+    const sp = this.para ? 5.2 : (this.inWater ? SWIM : I.sneak ? SNEAK : this.sprinting ? RUN : WALK) * (this.slow || 1) * (this.inWeb ? 0.25 : 1);
+    const acc = this.onGround ? ACC_G : this.para ? 10 : ACC_A;
     const tx = fx * sp, tz = fz * sp, dvx = tx - v[0], dvz = tz - v[2], dm = Math.hypot(dvx, dvz), md = acc * dt;
     // ノックバック中は空中で操作が効きにくい
     if (dm > md) { v[0] += dvx / dm * md; v[2] += dvz / dm * md; } else { v[0] = tx; v[2] = tz; }
+    if (this.para && this.inWater) { this.para = false; this.onParaLand?.(); }
     if (this.inWater) { v[1] -= GRAV * 0.2 * dt; if (v[1] < -2.5) v[1] = -2.5; if (I.jump) v[1] = Math.min(v[1] + 24 * dt, 3.2); this.fallTop = p[1]; }
     else { v[1] -= GRAV * dt; if (v[1] < -50) v[1] = -50; if (I.jump && this.onGround) { v[1] = JUMP_V; this.onGround = false; this.onJump?.(); } }
     if (this.inWeb) { v[1] = Math.max(v[1], -1.2); if (v[1] > 1) v[1] = 1; }
+    if (this.para) { v[1] = Math.max(v[1], -3.4); this.fallTop = p[1]; }
     const wasG = this.onGround;
     // しゃがんでいると足場の外へ出ない
     for (const ax of [0, 2]) {
@@ -59,8 +61,9 @@ export class Player {
       if (v[1] < 0) {
         this.onGround = true;
         const fall = this.fallTop - p[1];
-        if (!wasG && fall > 3.5) this.onFall?.(Math.floor(fall - 3));
+        if (!wasG && fall > 3.5 && !this.para) this.onFall?.(Math.floor(fall - 3));
         if (!wasG) this.onLand?.(-v[1]);
+        if (this.para) { this.para = false; this.onParaLand?.(); }
       }
       v[1] = 0;
     }

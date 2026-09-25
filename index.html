@@ -56,7 +56,8 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .top{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center}
 .clock{font-family:var(--pix);font-size:32px;letter-spacing:.04em}
 .phase{font-size:13px;margin-top:2px;padding:3px 10px;border-radius:6px;background:var(--glass);display:inline-block}
-.phase.fight{color:#ff9a8a}.phase.safe{color:#9fe8a0}.phase.border{color:#ffd080}
+.phase.fight{color:#ff9a8a}.phase.safe{color:#9fe8a0}.phase.border{color:#ffd080}.phase.danger{color:#fff;background:rgba(200,30,30,.8)}
+.win{margin:0;font-family:var(--pix);font-size:34px}.win.me{font-size:56px;color:var(--accent);text-shadow:3px 3px 0 #000}
 .board{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));background:var(--glass);border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.7;min-width:130px}
 .board div{display:flex;gap:8px;align-items:center}.board b{margin-left:auto;font-family:var(--pix)}
 .board canvas{width:16px;height:16px;image-rendering:pixelated}
@@ -89,7 +90,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .guiLabel{position:absolute;font-size:calc(var(--k)*6.5px);font-family:var(--pix);color:#404040;white-space:nowrap}
 .guiSmall{font-size:calc(var(--k)*5.5px);font-family:var(--pix);color:#404040;margin-top:4px}
 .gslot{position:absolute;width:calc(var(--k)*18px);height:calc(var(--k)*18px);background:#8b8b8b;box-shadow:inset calc(var(--k)*1px) calc(var(--k)*1px) 0 #373737,inset calc(var(--k)*-1px) calc(var(--k)*-1px) 0 #fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.gslot:hover{background:#a2a2a2}
+.gslot:hover{background:#a2a2a2}.gslot.drag{background:#b8b8b8;box-shadow:inset 0 0 0 calc(var(--k)*1px) #fff}
 .gslot canvas{width:calc(var(--k)*16px);height:calc(var(--k)*16px);image-rendering:pixelated;pointer-events:none}
 .gslot b{position:absolute;right:calc(var(--k)*1px);bottom:0;font-family:var(--pix);font-weight:400;font-size:calc(var(--k)*7px);color:#fff;text-shadow:calc(var(--k)*1px) calc(var(--k)*1px) 0 #3f3f3f;pointer-events:none}
 .gslot i,.hslot i{position:absolute;left:12%;right:12%;bottom:10%;height:2px;background:#000;pointer-events:none}
@@ -141,7 +142,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 <section id="title" class="screen">
   <div class="card">
     <h1 class="logo">じゅっぷん<br><span>クラフト</span></h1>
-    <p class="sub">10分で集めて、作って、戦う。<br>リンクを送るだけで、最大4人のブロック対戦。</p>
+    <p class="sub">パラシュートで降りて、集めて、作って、戦う。<br>最後の1人がドン勝。リンクを送るだけで最大4人のバトロワ。</p>
     <div id="joinBox" class="row" hidden><b id="joinLabel"></b></div>
     <label class="f">名前</label>
     <input type="text" id="name" maxlength="10" placeholder="10文字まで">
@@ -153,7 +154,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
       <button class="btn ghost" id="bSolo">ひとりで練習</button>
     </div>
     <div class="rules">
-      <b>ルール</b>　最初の2分は準備時間（攻撃できません）。木を切って道具を作り、石や鉄を掘って武器を強くしよう。2分から戦闘開始、最後の2分は赤い境界がどんどん狭まります。10分で<b>倒した数</b>が多い人の勝ち。倒されると持ち物をその場に落とし、5秒後に復活します。<br>
+      <b>ルール</b>　全員がパラシュートで島の四隅に降下。最初の2分は準備時間（攻撃できません）。木を切って道具を作り、石や鉄を掘って武器を強くしよう。3分から赤い安全地帯がどんどん狭まり、外にいると体力が減ります。倒されたら脱落（持ち物はその場に落ちます）。<b>最後の1人がドン勝</b>。10分たっても決着しなければ、生き残りのうち倒した数が多い人の勝ち。<br>
       <b>定員4人</b>。5人目からは観戦しながら待ち、次の試合から入れます。
     </div>
     <p class="note">通信はブラウザ同士を直接つなぎます（接続の仲介に PeerJS の公開サーバーを使います）。会社や学校のネットワークではつながらないことがあります。</p>
@@ -207,7 +208,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 
 <section id="result" class="screen" hidden>
   <div class="card">
-    <h2 style="margin:0">試合終了</h2>
+    <h2 id="winTitle" class="win">試合終了</h2>
     <div class="rank" id="rank"></div>
     <div class="note" id="resNote"></div>
     <div class="row"><button class="btn primary" id="bAgain" hidden>もう一度（同じ部屋で）</button><span class="note" id="resWait"></span></div>

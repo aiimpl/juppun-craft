@@ -66,6 +66,7 @@ export class Sound {
   eat() { for (let i = 0; i < 3; i++) this.burst({ f: 1200, q: 1, dur: 0.06, vol: 0.2, at: i * 0.12 }); }
   death() { this.tone({ f: 300, fEnd: 60, dur: 0.8, vol: 0.25, type: 'sawtooth' }); }
   kill() { this.tone({ f: 660, dur: 0.12, vol: 0.18, type: 'square' }); this.tone({ f: 990, dur: 0.25, vol: 0.18, type: 'square', at: 0.1 }); }
+  win() { [523, 659, 784, 1047].forEach((f, i) => this.tone({ f, dur: 0.5, vol: 0.2, type: 'square', at: i * 0.14 })); this.tone({ f: 1047, dur: 1.4, vol: 0.18, type: 'triangle', at: 0.6 }); }
   gong() { this.tone({ f: 110, dur: 2.2, vol: 0.35, attack: 0.01 }); this.tone({ f: 166, dur: 1.6, vol: 0.16, attack: 0.01 }); this.tone({ f: 263, dur: 1.1, vol: 0.08, attack: 0.01 }); }
   // 環境音：街のざわめき＋（夕方・夜は）虫の声
   ambient(time) {

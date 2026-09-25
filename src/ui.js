@@ -17,6 +17,20 @@ export class ContainerUI {
     addEventListener('pointermove', e => { this.cur.style.left = e.clientX + 'px'; this.cur.style.top = e.clientY + 'px'; });
     root.addEventListener('pointerdown', e => { if (e.target === root && this.cursor) { this.drop(this.cursor); this.cursor = null; this.render(); } });
     root.addEventListener('contextmenu', e => e.preventDefault());
+    addEventListener('pointermove', e => {
+      if (!this.drag) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gslot');
+      if (!el || !el._ref || this.drag.els.includes(el)) return;
+      const r = el._ref; if (r.kind === 'out' || r.kind === 'fout') return;
+      const s = r.arr[r.i]; if (s && !(s.id === this.cursor.id && !ITEMS[s.id].dur)) return;
+      if (r.kind === 'armor' && this.inv.slotFor(this.cursor.id) !== r.i) return;
+      this.drag.refs.push(r); this.drag.els.push(el); el.classList.add('drag');
+    });
+    addEventListener('pointerup', () => {
+      const D = this.drag; if (!D) return; this.drag = null; clearTimeout(D.timer);
+      if (D.refs.length === 1) { this.click(D.refs[0], D.btn, false); this.lastClick = { ref: D.refs[0], t: performance.now() }; return; }
+      this.distribute(D.refs, D.btn);
+    });
   }
   show(kind, furnace = null) {
     this.kind = kind; this.furnace = furnace; this.open = true;
@@ -39,11 +53,22 @@ export class ContainerUI {
     const slot = (x, y, arr, i, kind, extra = '') => {
       const d = document.createElement('div'); d.className = 'gslot ' + extra; d.style.left = (x - 1) * k + 'px'; d.style.top = (y - 1) * k + 'px';
       this.fillSlot(d, arr[i]);
-      const handler = (btn, shift) => { this.click({ arr, i, kind }, btn, shift); };
+      const ref = { arr, i, kind }; d._ref = ref;
       d.addEventListener('pointerdown', e => {
         e.preventDefault(); e.stopPropagation();
-        if (e.pointerType === 'touch') { let held = false; const t = setTimeout(() => { held = true; handler(2, false); }, 380); d.onpointerup = () => { clearTimeout(t); if (!held) handler(0, false); d.onpointerup = null; }; return; }
-        handler(e.button === 2 ? 2 : 0, e.shiftKey);
+        const touch = e.pointerType === 'touch', btn = e.button === 2 ? 2 : 0;
+        // ダブルクリック：同じ物をまとめてつかむ
+        const t = performance.now();
+        if (btn === 0 && !e.shiftKey && this.lastClick && this.lastClick.ref.arr === arr && this.lastClick.ref.i === i && t - this.lastClick.t < 320 && this.cursor) { this.gather(); this.lastClick = null; return; }
+        // つかんでいる物があれば、なぞって分ける（左＝均等、右＝1個ずつ）
+        if (this.cursor && !e.shiftKey && kind !== 'out' && kind !== 'fout') {
+          this.drag = { btn, refs: [ref], els: [d] }; d.classList.add('drag');
+          if (touch) this.drag.timer = setTimeout(() => { if (this.drag && this.drag.refs.length === 1) this.drag.btn = 2; }, 380);
+          return;
+        }
+        if (touch && !this.cursor) { let held = false; const tm = setTimeout(() => { held = true; this.click(ref, 2, false); }, 380); d.onpointerup = () => { clearTimeout(tm); if (!held) this.click(ref, 0, false); d.onpointerup = null; }; return; }
+        this.click(ref, btn, e.shiftKey);
+        this.lastClick = { ref, t };
       });
       if (ITEMS[arr[i]?.id]) d.title = ITEMS[arr[i].id].name;
       p.appendChild(d); return d;
@@ -112,6 +137,28 @@ export class ContainerUI {
     this.after();
   }
   after() { this.inv.changed(); if (this.furnace) this.furnace.dirty = false; this.sound?.('click'); this.render(); }
+  // なぞったマスに分ける：左は均等（余りは手に残る）、右は1個ずつ
+  distribute(refs, btn) {
+    const c = this.cursor; if (!c) return;
+    const max = stackMax(c.id), each = btn === 2 ? 1 : Math.floor(c.n / refs.length);
+    if (each < 1) { this.click(refs[0], btn, false); return; }
+    for (const r of refs) {
+      if (!this.cursor || this.cursor.n <= 0) break;
+      const s = r.arr[r.i], room = s ? max - s.n : max, k = Math.min(each, room, this.cursor.n);
+      if (k <= 0) continue;
+      if (s) s.n += k; else r.arr[r.i] = { ...this.cursor, n: k };
+      this.cursor.n -= k;
+    }
+    if (this.cursor && this.cursor.n <= 0) this.cursor = null;
+    this.after();
+  }
+  // 同じ物を持ち物中から手に集める
+  gather() {
+    const c = this.cursor; if (!c || ITEMS[c.id].dur) return;
+    const max = stackMax(c.id);
+    for (const arr of [this.grid, this.inv.main]) for (let j = 0; j < arr.length && c.n < max; j++) { const s = arr[j]; if (s && s.id === c.id) { const k = Math.min(s.n, max - c.n); c.n += k; s.n -= k; if (!s.n) arr[j] = null; } }
+    this.after();
+  }
   takeOutput(shift) {
     const r = this.recipe; if (!r) return;
     const craftOnce = () => { for (let j = 0; j < this.grid.length; j++) if (this.grid[j]) { this.grid[j].n--; if (!this.grid[j].n) this.grid[j] = null; } };

@@ -65,6 +65,23 @@ export function animateCharacter(ch, speed, dt, swing = 0) {
   u.armR.rotation.x = a * 0.8 - swing * 1.6;
 }
 
+// ---- パラシュート（上から見ると四角いキャノピー） ----
+export function makeParachute(color = '#e84a3a') {
+  const g = new THREE.Group();
+  const c1 = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }), c2 = new THREE.MeshLambertMaterial({ color: 0xf4f0e8, side: THREE.DoubleSide });
+  // 弧になった7枚の板
+  for (let i = -3; i <= 3; i++) {
+    const a = i * 0.26, m = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 2.4), i % 2 ? c1 : c2);
+    m.position.set(Math.sin(a) * 2.3, Math.cos(a) * 2.3 - 2.3, 0); m.rotation.z = -a; m.castShadow = true; g.add(m);
+  }
+  const pts = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push(0, -2.2, 0, sx * 2.0, -0.35, sz * 1.1);
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x333333 })); g.add(lines);
+  g.userData.canopy = true;
+  return g;
+}
+
 // ---- 矢 ----
 export function makeArrow() {
   const g = new THREE.Group();

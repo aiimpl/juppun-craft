@@ -7,7 +7,7 @@ import { BLOCKS, B, ITEMS, SMELT, FUEL, SMELT_TIME, tilePixels, tileImage, crack
 import { Inventory, HOT } from './inv.js';
 import { ContainerUI } from './ui.js';
 import { ItemEntities, itemModel } from './items.js';
-import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, Debris } from './entities.js';
+import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachute, Debris } from './entities.js';
 import { Sound } from './audio.js';
 import { Net } from './net.js';
 
@@ -17,7 +17,7 @@ const R = new Renderer($('gl'), { mobile });
 const S = new Sound();
 const MAXP = location.search.includes('max1') ? 1 : 4; // 検証用に ?max1 で定員1人
 // 検証用：?debug で時間を短くする（部屋主の設定が全員に配られる）
-const CFG = location.search.includes('debug') ? { DUR: 90, SAFE: 8, SHRINK: 60 } : { DUR: 600, SAFE: 120, SHRINK: 480 };
+const CFG = location.search.includes('debug') ? { DUR: 120, SAFE: 12, SHRINK: 40 } : { DUR: 600, SAFE: 120, SHRINK: 180 };
 let DUR = CFG.DUR, SAFE = CFG.SAFE, SHRINK = CFG.SHRINK;
 function applyCfg() { if (room?.cfg) ({ DUR, SAFE, SHRINK } = room.cfg); }
 const COLORS = ['#ffd24a', '#7fd3ff', '#ff8fa8', '#a8f08a', '#d8a8ff', '#ffb070'];
@@ -104,7 +104,7 @@ $('bSolo').onclick = () => {
 // ---------- 通信 ----------
 function bindNet() {
   net.on.msg = (from, m) => isHost && from !== 'h' ? hostHandle(from, m) : clientHandle(m);
-  net.on.leave = id => { if (!isHost || !room.players[id]) return; feed(`${esc(room.players[id].name)} が抜けました`); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); delete room.roster[id]; removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); };
+  net.on.leave = id => { if (!isHost || !room.players[id]) return; feed(`${esc(room.players[id].name)} が抜けました`); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); if (room.alive?.[id]) { delete room.alive[id]; room.elim.push(id); } removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); checkEnd(); };
   net.on.lost = () => { if (state !== 'title') notice('部屋との接続が切れました', true); };
   net.on.error = e => console.warn('net', e?.type, e);
 }
@@ -141,8 +141,10 @@ function hostHandle(from, m) {
       if (!P) return;
       P.deaths++;
       const K = m.killer && room.players[m.killer]; if (K && m.killer !== from) K.kills++;
-      bcast({ t: 'died', id: from, killer: K ? m.killer : null, cause: m.cause, w: m.w });
+      if (room.alive?.[from]) { delete room.alive[from]; room.elim.push(from); }
+      bcast({ t: 'died', id: from, killer: K ? m.killer : null, cause: m.cause, w: m.w, left: Object.keys(room.alive || {}).length });
       bcast({ t: 'room', room });
+      setTimeout(checkEnd, 1500);
       break;
     }
     case 'ispawn': hostItems.set(m.id, { id: m.id, st: m.st, p: m.p }); bcast(m, from); break;
@@ -154,12 +156,26 @@ function startMatch() {
   const ids = room.queue.filter(id => room.players[id]).slice(0, MAXP);
   room.roster = {}; ids.forEach((id, i) => room.roster[id] = i);
   for (const p of Object.values(room.players)) { p.kills = 0; p.deaths = 0; }
-  room.seed = Math.floor(Math.random() * 1e9); room.t0 = now() + (solo ? 1500 : 4000); room.phase = 'game'; room.cfg = CFG;
+  room.seed = Math.floor(Math.random() * 1e9); room.t0 = now() + (solo ? 4000 : 6000); room.phase = 'game'; room.cfg = CFG;
+  room.alive = {}; ids.forEach(id => room.alive[id] = true); room.elim = []; room.winner = null;
+  room.zone = [WS / 2 + (Math.random() - 0.5) * 36, WS / 2 + (Math.random() - 0.5) * 36];
   mods = new Map(); hostItems = new Map();
   bcast({ t: 'start', room });
 }
-function endMatch() {
+// 生き残りが1人（ひとりの練習では0人）になったら終わり
+function checkEnd() {
+  if (!room || room.phase !== 'game') return;
+  const alive = Object.keys(room.alive || {}), n = Object.keys(room.roster).length;
+  if ((n >= 2 && alive.length <= 1) || alive.length === 0) endMatch(alive[0] || null);
+}
+function endMatch(winner) {
+  if (room.phase !== 'game') return;
   room.phase = 'result';
+  if (winner === undefined) { // 時間切れ：生き残りのうち倒した数が多い人
+    const alive = Object.keys(room.alive || {}); alive.sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
+    winner = alive[0] || null;
+  }
+  room.winner = winner;
   const played = room.queue.filter(id => id in room.roster), rest = room.queue.filter(id => !(id in room.roster));
   room.queue = [...rest, ...played];
   bcast({ t: 'end', room });
@@ -179,7 +195,7 @@ function clientHandle(m) {
       if (m.id === myId) return;
       let o = others.get(m.id); if (!o) o = addOther(m.id); if (!o) return;
       if (m.hp < o.hp && !m.dead) o.hurtT = 0.45;
-      o.tp = m.p; o.yaw = m.yaw; o.pitch = m.pitch; o.hp = m.hp; o.dead = m.dead; o.sneak = m.sn;
+      o.tp = m.p; o.yaw = m.yaw; o.pitch = m.pitch; o.hp = m.hp; o.dead = m.dead; o.sneak = m.sn; o.chute.visible = !!m.pa && !m.dead;
       if (m.sw) o.swing = 0.001;
       setHeldModel(o, m.held || null); drawTag(o.model.userData.tag, m.hp);
       break;
@@ -232,9 +248,13 @@ function enterGame(modList, itemList) {
   player = new Player(world); hookPlayer();
   inv.clear(); inv.sel = 0; inv.onChange = renderHotbar;
   hp = 20; food = 20; sat = 5; exhaust = 0; dead = false; protectUntil = 0; lastAttacker = null;
-  const sp = world.spawn(room.roster[myId] ?? 0);
-  player.place(spectator ? [WS / 2, 45, WS / 2 + 30] : sp, Math.atan2(sp[0] - WS / 2, sp[2] - WS / 2));
-  if (spectator) player.pitch = -0.6;
+  const sp = world.corner(room.roster[myId] ?? 0);
+  player.place(spectator ? [WS / 2, 60, WS / 2 + 40] : sp, Math.atan2(sp[0] - WS / 2, sp[2] - WS / 2));
+  player.para = !spectator; player.pitch = spectator ? -0.6 : -0.5;
+  myChute.visible = !spectator; out = false;
+  if (myModel) R.scene.remove(myModel);
+  myModel = makeCharacter(me.char, { name: '', color: '#fff' }); myModel.userData.tag.visible = false; R.scene.add(myModel);
+  camBlend = spectator ? 0 : 1;
   syncOthers(); renderHotbar(); renderStats(); renderBoard();
   $('spect').hidden = !spectator; $('hotbarWrap').hidden = spectator;
   if (spectator) { const pos = room.queue.indexOf(myId) + 1; $('spect').textContent = `観戦中：いまの試合が終わったら参加できます（待ち ${Math.max(1, pos - MAXP)}番目）`; }
@@ -251,8 +271,9 @@ function addOther(id) {
   if (!room || !(id in room.roster) || id === myId || !world) return null;
   const p = room.players[id]; if (!p) return null;
   const model = makeCharacter(p.char, { name: p.name, color: p.color }); R.scene.add(model);
-  const sp = world.spawn(room.roster[id]);
-  const o = { model, p: sp.slice(), tp: sp.slice(), yaw: 0, pitch: 0, hp: 20, swing: 0, dead: false, hurtT: 0, heldId: undefined };
+  const sp = world.corner(room.roster[id]);
+  const chute = makeParachute(p.color); chute.visible = false; model.add(chute); chute.position.y = 4.1;
+  const o = { chute, model, p: sp.slice(), tp: sp.slice(), yaw: 0, pitch: 0, hp: 20, swing: 0, dead: false, hurtT: 0, heldId: undefined };
   others.set(id, o); return o;
 }
 function removeOther(id) { const o = others.get(id); if (o) R.scene.remove(o.model); others.delete(id); }
@@ -306,8 +327,13 @@ function die(cause) {
   for (const st of inv.all()) spawnItem(st, [p[0], p[1] + 1, p[2]], [(Math.random() - 0.5) * 5, 2 + Math.random() * 3, (Math.random() - 0.5) * 5]);
   inv.clear();
   toHost({ t: 'died', killer, cause: killer ? null : cause, w: killer ? lastWeapon : null });
-  respawnAt = performance.now() + 5000;
-  $('centerMsg').hidden = false; $('bigMsg').textContent = '倒された';
+  respawnAt = performance.now() + 4000;
+  $('centerMsg').hidden = false; $('bigMsg').textContent = '脱落';
+}
+function becomeSpectator() {
+  spectator = true; dead = false; $('centerMsg').hidden = true; $('hotbarWrap').hidden = true;
+  $('spect').hidden = false; $('spect').textContent = '脱落しました。観戦中（自由に飛べます）';
+  player.p[1] += 6; player.para = false; myChute.visible = false;
 }
 function respawn() {
   dead = false; hp = 20; food = 20; sat = 5; exhaust = 0; lastAttacker = null;
@@ -322,12 +348,13 @@ function respawn() {
   player.place(best || world.spawn(0), player.yaw);
   protectUntil = performance.now() + 3000; $('centerMsg').hidden = true; renderStats();
 }
-const CAUSE = { fall: '落ちて', border: '境界の外で', hunger: '飢えて' };
+const CAUSE = { fall: '落ちて', border: '安全地帯の外で', hunger: '飢えて' };
 function onDied(m) {
   const P = room.players[m.id], K = m.killer && room.players[m.killer];
   const nm = p => p ? `<b style="color:${p.color}">${esc(p.name)}</b>` : '？';
   if (K) feed(`${nm(K)} が ${nm(P)} を倒した（${m.w ? ITEMS[m.w]?.name || '弓' : '素手'}）`);
   else feed(`${nm(P)} が${CAUSE[m.cause] || ''}力尽きた`);
+  if (m.left != null && Object.keys(room.roster).length > 1) feed(`<b>残り ${m.left}人</b>`);
   if (m.killer === myId) S.kill();
   const o = others.get(m.id); if (o) debris.spawn(o.p[0], o.p[1] + 0.5, o.p[2], P ? P.color : '#fff', 18, 1.2);
 }
@@ -433,13 +460,19 @@ function renderBoard() {
   if (!room) return;
   const ids = Object.keys(room.roster).sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
   $('board').innerHTML = '';
-  for (const id of ids) { const p = room.players[id]; if (!p) continue; const d = document.createElement('div'); d.append(faceCanvas(p.char, 16)); const n = document.createElement('span'); n.innerHTML = `<span style="color:${p.color}">${esc(p.name)}</span>`; d.append(n); const b = document.createElement('b'); b.textContent = p.kills; d.append(b); $('board').appendChild(d); }
+  for (const id of ids) { const p = room.players[id]; if (!p) continue; const d = document.createElement('div'); d.append(faceCanvas(p.char, 16)); const n = document.createElement('span'); n.innerHTML = `<span style="color:${p.color}">${esc(p.name)}</span>`; d.append(n); if (room.alive && !room.alive[id]) d.style.opacity = 0.4; const b = document.createElement('b'); b.textContent = p.kills; d.append(b); $('board').appendChild(d); }
+  if (room.alive) { const L = document.createElement('div'); L.innerHTML = `<span>残り</span><b>${Object.keys(room.alive).length}人</b>`; $('board').prepend(L); }
 }
 function fmt(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-function borderR() { const t = gameT(); if (t < SHRINK) return 999; return Math.max(8, 50 - (t - SHRINK) / (DUR - SHRINK) * 42); }
+function borderR() { const t = gameT(); if (t < SHRINK) return 999; return Math.max(4, 76 - (t - SHRINK) / (DUR - SHRINK) * 72); }
+function zoneC() { return room?.zone || [WS / 2, WS / 2]; }
+function zoneDmg() { return 1 + Math.max(0, gameT() - SHRINK) / 120; }
+let out = false;
 
 // ---------- 一人称の手元（マイクラの腕振り） ----------
 const fpRoot = new THREE.Group(); R.fpScene.add(fpRoot);
+const myChute = makeParachute('#e84a3a'); myChute.visible = false; R.scene.add(myChute);
+let myModel = null, camBlend = 0; // 降下中は3人称（camBlend=1）、着地したら1人称へ
 const fpHold = new THREE.Group(); fpRoot.add(fpHold);
 let swingT = -1, equipT = 1, lastHeldKey = '';
 function updateFP() {
@@ -637,18 +670,20 @@ function frame(t) {
       player.p[0] += (d[0] * I.f + rx * I.s) * sp * dt; player.p[1] += (d[1] * I.f + (I.jump ? 1 : 0) - (I.sneak ? 1 : 0)) * sp * dt; player.p[2] += (d[2] * I.f + rz * I.s) * sp * dt;
       player.p[1] = Math.max(2, Math.min(80, player.p[1]));
     } else if (!dead) {
-      acc += dt; while (acc >= DT) { acc -= DT; const x0 = player.p[0], z0 = player.p[2]; player.step(DT); player.stepHook(); if (player.sprinting) exhaust += Math.hypot(player.p[0] - x0, player.p[2] - z0) * 0.1; }
-      if (!open) actions(dt); else { crack.visible = false; sel.visible = false; }
+      if (tg < 0) { player.v = [0, 0, 0]; acc = 0; } else acc += dt;
+      while (acc >= DT) { acc -= DT; const x0 = player.p[0], z0 = player.p[2]; player.step(DT); player.stepHook(); if (player.sprinting) exhaust += Math.hypot(player.p[0] - x0, player.p[2] - z0) * 0.1; }
+      if (!open && !player.para) actions(dt); else { crack.visible = false; sel.visible = false; }
       tickFood(dt);
-      if (Math.hypot(player.p[0] - WS / 2, player.p[2] - WS / 2) > borderR()) { borderDmgT += dt; if (borderDmgT > 1) { borderDmgT = 0; hurt(1.5, null, null, 'border'); } }
-    } else if (performance.now() > respawnAt) respawn();
-    else $('smallMsg').textContent = `${Math.ceil((respawnAt - performance.now()) / 1000)}秒後に復活します`;
+      const zc = zoneC(); out = Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]) > borderR();
+      if (out && !player.para) { borderDmgT += dt; if (borderDmgT > 1) { borderDmgT = 0; hurt(zoneDmg(), null, null, 'border'); } }
+    } else if (performance.now() > respawnAt) becomeSpectator();
+    else $('smallMsg').textContent = `順位 ${Object.keys(room.alive || {}).length + 1}位　まもなく観戦に切り替わります`;
     tickFurnaces(dt); gui.tick();
     items.update(dt, spectator || dead ? null : player.p, onTouchItem);
     posT += dt;
     if (posT > 1 / 15 && !spectator && !solo) {
       posT = 0; const h = inv.held();
-      toAll({ t: 'pos', p: player.p.map(v => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), held: h?.id || null, hp: Math.round(hp * 2) / 2, dead, sw: swingSent, sn: player.input.sneak });
+      toAll({ t: 'pos', p: player.p.map(v => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), held: h?.id || null, hp: Math.round(hp * 2) / 2, dead, sw: swingSent, sn: player.input.sneak, pa: !!player.para });
       swingSent = false;
     }
     for (const [id, o] of others) {
@@ -665,12 +700,28 @@ function frame(t) {
     updateArrows(dt);
     // カメラ（被弾で傾く・走ると視野が広がる）
     const e = player.eye(), drop = player.input.sneak && !spectator ? 0.12 : 0;
-    cam.position.set(e[0], e[1] - drop, e[2]);
     hurtRoll = Math.max(0, hurtRoll - dt * 3);
+    cam.position.set(e[0], e[1] - drop, e[2]);
     cam.rotation.set(player.pitch, player.yaw, Math.sin(hurtRoll * Math.PI) * 0.12 * hurtDir, 'YXZ');
+    // 降下中は後ろから（3人称）、着地したら目線（1人称）へ
+    const want3 = player.para && !spectator && !dead ? 1 : 0;
+    camBlend += (want3 - camBlend) * Math.min(1, dt * (want3 ? 6 : 3.5)); if (Math.abs(camBlend - want3) < 0.01) camBlend = want3;
+    if (myModel) {
+      myModel.visible = camBlend > 0.05 && !spectator && !dead;
+      myModel.position.set(player.p[0], player.p[1], player.p[2]); myModel.rotation.y = player.yaw;
+      animateCharacter(myModel, player.para ? 0 : Math.hypot(player.v[0], player.v[2]), dt, 0);
+      if (player.para) { myModel.userData.armL.rotation.x = -2.6; myModel.userData.armR.rotation.x = -2.6; }
+    }
+    if (camBlend > 0) {
+      const d = player.dir(), back = 7.5, up = 2.2;
+      const tp = [player.p[0] - d[0] * back, player.p[1] + 1.4 - d[1] * back + up, player.p[2] - d[2] * back];
+      const u = camBlend * camBlend * (3 - 2 * camBlend);
+      cam.position.set(e[0] + (tp[0] - e[0]) * u, e[1] + (tp[1] - e[1]) * u, e[2] + (tp[2] - e[2]) * u);
+    }
     const wantFov = 75 * (player.sprinting ? 1.12 : 1) * (bowCharge >= 0 ? 1 - bowCharge * 0.15 : 1);
     fov += (wantFov - fov) * Math.min(1, dt * 8); if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
-    fpRoot.visible = !spectator && !dead; animFP(dt);
+    fpRoot.visible = !spectator && !dead && camBlend < 0.05; animFP(dt);
+    if (myChute.visible) { if (!player.para) myChute.visible = false; myChute.position.set(player.p[0], player.p[1] + 4.1, player.p[2]); myChute.rotation.y = player.yaw; }
     const ch = attackCharge(); $('atkbar').hidden = ch >= 1 || spectator || dead; $('atkfill').style.width = `${ch * 100}%`;
     nameT -= dt; $('itemname').style.opacity = Math.max(0, Math.min(1, nameT));
     const left = tg < 0 ? -tg : DUR - tg;
@@ -678,12 +729,14 @@ function frame(t) {
     const ph = $('phase');
     if (tg < 0) { ph.textContent = 'まもなく開始'; ph.className = 'phase'; }
     else if (tg < SAFE) { ph.textContent = `準備時間：攻撃できません（あと${fmt(SAFE - tg)}）`; ph.className = 'phase safe'; }
-    else if (tg < SHRINK) { ph.textContent = '戦闘中'; ph.className = 'phase fight'; }
-    else { ph.textContent = '境界が狭まっています'; ph.className = 'phase border'; }
+    else if (tg < SHRINK) { ph.textContent = `戦闘中・安全地帯の縮小まで${fmt(SHRINK - tg)}`; ph.className = 'phase fight'; }
+    else if (out && !spectator) { const zc = zoneC(); ph.textContent = `安全地帯の外！ 中心まで${Math.round(Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]))}m`; ph.className = 'phase danger'; }
+    else { ph.textContent = '安全地帯が縮小中'; ph.className = 'phase border'; }
+    if (player.para && !spectator) { ph.textContent = tg < 0 ? 'まもなく降下' : 'パラシュート降下中（WASDで向きを変える）'; ph.className = 'phase'; }
     if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); }
     if (tg >= SAFE && !announced.fight) { announced.fight = true; S.gong(); feed('<b>戦闘開始！</b>'); }
-    if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed('<b>境界が狭まり始めた！</b> 赤い壁の外にいると体力が減ります'); }
-    R.setBorder(tg >= SHRINK ? borderR() : 999); R.setDay(Math.max(0, Math.min(1, tg / DUR)));
+    if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed('<b>安全地帯が縮み始めた！</b> 赤い壁の外にいると体力が減ります'); }
+    R.border.position.x = zoneC()[0]; R.border.position.z = zoneC()[1]; R.setBorder(tg >= SHRINK ? borderR() : 999); R.setDay(Math.max(0, Math.min(1, tg / DUR)));
     if (isHost && tg >= DUR && room.phase === 'game') endMatch();
     R.updateDirty(world);
   } else if (world) {
@@ -703,14 +756,20 @@ setInterval(() => { if (isHost && room?.phase === 'game' && gameT() >= DUR) endM
 // ---------- 結果 ----------
 function showResult() {
   state = 'result'; show('result'); document.exitPointerLock?.(); $('hud').hidden = true; gui.close();
-  const ids = Object.keys(room.roster).sort((a, b) => (room.players[b]?.kills - room.players[a]?.kills) || (room.players[a]?.deaths - room.players[b]?.deaths));
+  // 順位：ドン勝 → 時間切れで生き残った人 → 脱落が遅かった順
+  const alive = Object.keys(room.alive || {}).filter(id => id !== room.winner).sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
+  const order = [...(room.winner ? [room.winner] : []), ...alive, ...[...(room.elim || [])].reverse()].filter((id, i, arr) => arr.indexOf(id) === i && room.players[id]);
+  const W = room.players[room.winner];
+  $('winTitle').textContent = !W ? '試合終了' : room.winner === myId ? 'ドン勝！' : `${W.name} がドン勝！`;
+  $('winTitle').className = room.winner === myId ? 'win me' : 'win';
   $('rank').innerHTML = '';
-  ids.forEach((id, i) => {
-    const p = room.players[id]; if (!p) return;
+  order.forEach((id, i) => {
+    const p = room.players[id];
     const d = document.createElement('div'); d.append(`${i + 1}位`); d.append(faceCanvas(p.char, 30));
     const n = document.createElement('span'); n.innerHTML = `<b style="color:${p.color};font-family:inherit">${esc(p.name)}</b>${id === myId ? '（あなた）' : ''}`; d.append(n);
-    const s = document.createElement('b'); s.textContent = `${p.kills}キル ${p.deaths}デス`; d.append(s); $('rank').appendChild(d);
+    const k = document.createElement('b'); k.textContent = `${p.kills}キル`; d.append(k); $('rank').appendChild(d);
   });
+  if (room.winner === myId) S.win?.();
   const waiting = room.queue.filter(id => room.players[id] && !(id in room.roster)).length;
   $('resNote').textContent = solo ? 'ひとりで練習した結果です。部屋を作ると友達と対戦できます。' : waiting ? `次の試合は、待っていた ${waiting}人が先に入ります。` : '';
   $('bAgain').hidden = !isHost; $('resWait').textContent = isHost ? '' : '部屋を作った人が次の試合を始めるのを待っています';
