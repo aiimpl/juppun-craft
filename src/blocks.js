@@ -74,6 +74,18 @@ def('string', t => t.clear().art(['', '...........ss...', '..........s..s..', '.
 def('apple', t => t.clear().art(['', '.......h........', '......hh.ll.....', '.......hlll.....', '....rrrhrrr.....', '...rrRrrrrrr....', '..rrRRrrrrrrr...', '..rrRrrrrrrrr...', '..rrrrrrrrrrr...', '..rrrrrrrrrrr...', '...rrrrrrrrr....', '....rrrrrrr.....', '.....rr.rr......', '', '', ''].map(r => r.padEnd(16, '.')), { r: [210, 40, 40], R: [250, 150, 150], h: [90, 60, 30], l: [70, 150, 50] }));
 def('bow', t => t.clear().art(['..........HHH...', '........HH..s...', '.......H....s...', '......H.....s...', '.....H......s...', '....H.......s...', '...H........s...', '..H.........s...', '..H........s....', '..H.......s.....', '...H.....s......', '....H...s.......', '.....H.s........', '......Hs........', '.......H........', '................'], { ...HANDLE, s: [236, 236, 240] }));
 def('arrow', t => t.clear().art(['...........sss..', '............Ss..', '...........S.s..', '..........h.....', '.........h......', '........h.......', '.......h........', '......h.........', '.....h..........', '....h...........', '..fh............', '.ff.............', 'fff.............', '.f..............', '................', '................'], { h: HANDLE.h, s: [200, 200, 200], S: [120, 120, 120], f: [240, 240, 240] }));
+// アイテムの絵に陰影をつける（右下の縁を暗く、左上の縁を明るく、外周に濃い輪郭）
+function shadeItem(t) {
+  const A = (x, y) => x >= 0 && y >= 0 && x < TS && y < TS && t.px[(y * TS + x) * 4 + 3] > 127;
+  const src = new Uint8ClampedArray(t.px);
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const i = (y * TS + x) * 4; if (src[i + 3] < 128) continue;
+    let k = 1;
+    if (!A(x + 1, y) || !A(x, y + 1)) k = 0.62; else if (!A(x - 1, y) || !A(x, y - 1)) k = 1.18;
+    for (let c = 0; c < 3; c++) t.px[i + c] = Math.min(255, src[i + c] * k);
+  }
+}
+for (const n of Object.keys(T)) if (/^(sword|pick|axe|shovel|helmet|chest|legs|boots)_|^(stick|coal|iron|diamond|flint|apple|bow|arrow|string)$/.test(n)) shadeItem(T[n]);
 def('border', t => { for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) t.set(x, y, [255, 60, 60], ((x + y) % 8 < 3) ? 150 : 40); });
 
 // ---- ブロック ----

@@ -2,7 +2,7 @@
 import { BLOCKS, B } from './blocks.js';
 
 export const DT = 1 / 60;
-const GRAV = 32, JUMP_V = 8.9, WALK = 4.317, RUN = 5.612, SNEAK = 1.31, SWIM = 2.2, ACC_G = 50, ACC_A = 14;
+const GRAV = 32, JUMP_V = 8.9, WALK = 3.7, RUN = 5.2, SNEAK = 1.31, SWIM = 2.2, ACC_G = 50, ACC_A = 14;
 export const PW = 0.3, PH = 1.8, EYE = 1.62;
 
 export class Player {

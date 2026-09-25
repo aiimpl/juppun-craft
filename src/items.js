@@ -1,6 +1,6 @@
 // 地面に落ちたアイテム：はじけ飛んで落ち、回りながら浮かぶ。近づくと吸い寄せられる
 import * as THREE from '../vendor/three/build/three.module.js';
-import { ITEMS, B, BLOCKS, iconCanvas } from './blocks.js';
+import { ITEMS, B, BLOCKS, iconCanvas, tilePixels } from './blocks.js';
 
 const texCache = new Map();
 function tex(id) {
@@ -13,13 +13,36 @@ function blockMats(id, atlasFaces) {
   if (blockMatCache.has(id)) return blockMatCache.get(id);
   const m = atlasFaces(ITEMS[id].block); blockMatCache.set(id, m); return m;
 }
+// ドット絵を1ドットずつ押し出した立体（マイクラの手持ち・落ちたアイテムと同じ作り）
+const extrudeCache = new Map();
+const lin = v => Math.pow(v / 255, 2.2);
+function extruded(id) {
+  if (extrudeCache.has(id)) return extrudeCache.get(id);
+  const px = tilePixels(ITEMS[id].icon), N = 16, D = 1 / 16;
+  const a = (x, y) => x >= 0 && y >= 0 && x < N && y < N && px[(y * N + x) * 4 + 3] > 127;
+  const pos = [], nor = [], col = [], idx = [];
+  const quad = (v, n, c, shade) => { const b = pos.length / 3; for (const q of v) { pos.push(...q); nor.push(...n); col.push(lin(c[0]) * shade, lin(c[1]) * shade, lin(c[2]) * shade); } idx.push(b, b + 1, b + 2, b, b + 2, b + 3); };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (!a(x, y)) continue;
+    const i = (y * N + x) * 4, c = [px[i], px[i + 1], px[i + 2]];
+    const x0 = x / N - 0.5, x1 = (x + 1) / N - 0.5, y0 = 0.5 - (y + 1) / N, y1 = 0.5 - y / N, z0 = -D / 2, z1 = D / 2;
+    quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], c, 1);
+    quad([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], c, 0.8);
+    if (!a(x, y - 1)) quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], c, 0.95);
+    if (!a(x, y + 1)) quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], c, 0.6);
+    if (!a(x - 1, y)) quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], c, 0.7);
+    if (!a(x + 1, y)) quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], c, 0.7);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+  extrudeCache.set(id, g); return g;
+}
+const extrudeMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 export function itemModel(id, atlasFaces, size = 0.26) {
   const it = ITEMS[id];
   if (it.block) { const m = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), blockMats(id, atlasFaces)); m.castShadow = true; return m; }
-  // 平たい絵を少し厚みのある板に（マイクラの落ちたアイテムのように）
-  const g = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ map: tex(id), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
-  for (let k = 0; k < 3; k++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(size * 1.7, size * 1.7), mat); p.position.z = (k - 1) * 0.012; g.add(p); }
-  return g;
+  const m = new THREE.Mesh(extruded(id), extrudeMat); m.scale.setScalar(size * 1.7); m.castShadow = true;
+  const g = new THREE.Group(); g.add(m); return g;
 }
 
 export class ItemEntities {

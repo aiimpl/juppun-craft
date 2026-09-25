@@ -479,7 +479,7 @@ function updateFP() {
   const h = inv.held(), key = h ? h.id : '';
   if (key === lastHeldKey && fpHold.children.length) return; lastHeldKey = key; fpHold.clear();
   if (!h) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.66), new THREE.MeshLambertMaterial({ color: CHARS[me.char].skin })); arm.position.set(0, 0, 0.14); fpHold.add(arm); fpHold.userData.kind = 'arm'; return; }
-  const it = ITEMS[h.id], m = itemModel(h.id, blockFaceMats, it.block ? 0.34 : 0.42);
+  const it = ITEMS[h.id], m = itemModel(h.id, blockFaceMats, it.block ? 0.34 : 0.32);
   if (it.block) m.rotation.set(0, Math.PI / 4, 0); else { m.rotation.set(-0.25, -0.95, 0.3); m.position.set(0, 0.08, 0); }
   fpHold.add(m); fpHold.userData.kind = it.block ? 'block' : 'item';
 }
