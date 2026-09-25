@@ -65,21 +65,60 @@ export function animateCharacter(ch, speed, dt, swing = 0) {
   u.armR.rotation.x = a * 0.8 - swing * 1.6;
 }
 
-// ---- パラシュート（上から見ると四角いキャノピー） ----
+// ---- パラシュート（ラムエア型：弧を描く翼に、空気を取り込むセルと吊りひも） ----
 export function makeParachute(color = '#e84a3a') {
-  const g = new THREE.Group();
-  const c1 = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }), c2 = new THREE.MeshLambertMaterial({ color: 0xf4f0e8, side: THREE.DoubleSide });
-  // 弧になった7枚の板
-  for (let i = -3; i <= 3; i++) {
-    const a = i * 0.26, m = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 2.4), i % 2 ? c1 : c2);
-    m.position.set(Math.sin(a) * 2.3, Math.cos(a) * 2.3 - 2.3, 0); m.rotation.z = -a; m.castShadow = true; g.add(m);
+  const g = new THREE.Group(), canopy = new THREE.Group(); g.add(canopy);
+  const main = new THREE.Color(color), white = new THREE.Color(0xf6f2ea), dark = main.clone().multiplyScalar(0.45);
+  const N = 9, span = 7.2, R = 5.2, chord = 2.9, thick = 0.5;
+  const pos = [], col = [], idx = [];
+  const push = (v, c) => { pos.push(...v); col.push(c.r, c.g, c.b); return pos.length / 3 - 1; };
+  const quad = (a, b, c, d, cl) => { const i = [a, b, c, d].map(v => push(v, cl)); idx.push(i[0], i[1], i[2], i[0], i[2], i[3]); };
+  const arc = (t, h) => { const ang = (t - 0.5) * span / R; return [Math.sin(ang) * (R + h), Math.cos(ang) * (R + h) - R, 0]; };
+  for (let i = 0; i < N; i++) {
+    const t0 = i / N, t1 = (i + 1) / N, c = i % 2 ? white : main, under = c.clone().multiplyScalar(0.92);
+    const T0 = arc(t0, thick / 2), T1 = arc(t1, thick / 2), B0 = arc(t0, -thick / 2), B1 = arc(t1, -thick / 2);
+    const z0 = -chord / 2, z1 = chord / 2, at = (p, z) => [p[0], p[1], z];
+    quad(at(T0, z1), at(T1, z1), at(T1, z0), at(T0, z0), c);          // 上面
+    quad(at(B0, z0), at(B1, z0), at(B1, z1), at(B0, z1), under);      // 下面
+    quad(at(B0, z1), at(B1, z1), at(T1, z1), at(T0, z1), c.clone().multiplyScalar(0.9)); // 後ろの縁
+    quad(at(T0, z0), at(T1, z0), at(B1, z0), at(B0, z0), dark);       // 前の空気取り入れ口（暗く）
   }
-  const pts = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push(0, -2.2, 0, sx * 2.0, -0.35, sz * 1.1);
-  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x333333 })); g.add(lines);
-  g.userData.canopy = true;
+  // 両端のふさぎ
+  for (const t of [0, 1]) { const T = arc(t, thick / 2), Bt = arc(t, -thick / 2); quad([Bt[0], Bt[1], -chord / 2], [Bt[0], Bt[1], chord / 2], [T[0], T[1], chord / 2], [T[0], T[1], -chord / 2], main.clone().multiplyScalar(0.8)); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false, emissive: 0x3a3a3a }));
+  mesh.castShadow = true; canopy.add(mesh);
+  // 吊りひも：翼の下面からキャラの肩へ
+  const lp = [];
+  for (let i = 0; i <= N; i += 1.5) for (const z of [-chord * 0.35, chord * 0.35]) { const B = arc(i / N, -thick / 2); lp.push(B[0], B[1], z, Math.sign(B[0]) * 0.25, -4.6, 0); }
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+  canopy.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x2a2a2a, transparent: true, opacity: 0.7, fog: false })));
+  g.userData = { canopy, t: Math.random() * 10 };
   return g;
+}
+// 揺れ（ふわふわ・向きを変えると傾く）
+export function swayParachute(g, dt, turn = 0) {
+  const u = g.userData; u.t += dt;
+  u.canopy.rotation.z = Math.sin(u.t * 1.3) * 0.06 - turn * 0.25;
+  u.canopy.rotation.x = Math.sin(u.t * 0.9) * 0.04;
+  u.canopy.position.y = Math.sin(u.t * 1.7) * 0.08;
+}
+// 降下の軌跡（遠くからでも位置がわかる色つきの帯）
+export class Trail {
+  constructor(scene, color) {
+    this.n = 60; this.pts = []; this.scene = scene;
+    this.geo = new THREE.BufferGeometry(); this.geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(this.n * 3), 3));
+    this.line = new THREE.Line(this.geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, fog: false }));
+    this.line.frustumCulled = false; scene.add(this.line); this.acc = 0;
+  }
+  add(x, y, z, dt) {
+    this.acc += dt; if (this.acc < 0.08) return; this.acc = 0;
+    this.pts.push([x, y, z]); if (this.pts.length > this.n) this.pts.shift();
+    const a = this.geo.attributes.position; for (let i = 0; i < this.n; i++) { const p = this.pts[Math.min(i, this.pts.length - 1)] || [x, y, z]; a.setXYZ(i, ...p); }
+    a.needsUpdate = true; this.geo.setDrawRange(0, this.pts.length);
+  }
+  clear() { this.pts = []; this.geo.setDrawRange(0, 0); }
+  dispose() { this.scene.remove(this.line); }
 }
 
 // ---- 矢 ----

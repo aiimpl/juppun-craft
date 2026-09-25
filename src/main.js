@@ -7,7 +7,7 @@ import { BLOCKS, B, ITEMS, SMELT, FUEL, SMELT_TIME, tilePixels, tileImage, crack
 import { Inventory, HOT } from './inv.js';
 import { ContainerUI } from './ui.js';
 import { ItemEntities, itemModel } from './items.js';
-import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachute, Debris } from './entities.js';
+import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachute, swayParachute, Trail, Debris } from './entities.js';
 import { Sound } from './audio.js';
 import { Net, codeFromWord, PUBLIC_SLOTS } from './net.js';
 
@@ -204,7 +204,7 @@ function startMatch() {
   for (const p of Object.values(room.players)) { p.kills = 0; p.deaths = 0; }
   room.seed = Math.floor(Math.random() * 1e9); room.t0 = now() + (solo ? 4000 : 6000); room.phase = 'game'; room.cfg = CFG;
   room.alive = {}; ids.forEach(id => room.alive[id] = true); room.elim = []; room.winner = null;
-  room.zone = [WS / 2 + (Math.random() - 0.5) * 36, WS / 2 + (Math.random() - 0.5) * 36];
+  room.zone = [WS / 2 + (Math.random() - 0.5) * WS * 0.28, WS / 2 + (Math.random() - 0.5) * WS * 0.28];
   mods = new Map(); hostItems = new Map();
   bcast({ t: 'start', room });
 }
@@ -320,7 +320,8 @@ function enterGame(modList, itemList) {
   const sp = world.corner(room.roster[myId] ?? 0);
   player.place(spectator ? [WS / 2, 60, WS / 2 + 40] : sp, Math.atan2(sp[0] - WS / 2, sp[2] - WS / 2));
   player.para = !spectator; player.pitch = spectator ? -0.6 : -0.5;
-  myChute.visible = !spectator; out = false;
+  myChute.visible = !spectator; out = false; myTrail.clear();
+  { const c = room.players[myId]?.color || '#e84a3a'; R.scene.remove(myChute); myChute = makeParachute(c); myChute.visible = !spectator; R.scene.add(myChute); }
   if (myModel) R.scene.remove(myModel);
   myModel = makeCharacter(me.char, { name: '', color: '#fff' }); myModel.userData.tag.visible = false; R.scene.add(myModel);
   camBlend = spectator ? 0 : 1;
@@ -341,11 +342,24 @@ function addOther(id) {
   const p = room.players[id]; if (!p) return null;
   const model = makeCharacter(p.char, { name: p.name, color: p.color }); R.scene.add(model);
   const sp = world.corner(room.roster[id]);
-  const chute = makeParachute(p.color); chute.visible = false; model.add(chute); chute.position.y = 4.1;
-  const o = { chute, model, p: sp.slice(), tp: sp.slice(), yaw: 0, pitch: 0, hp: 20, swing: 0, dead: false, hurtT: 0, heldId: undefined };
+  const chute = makeParachute(p.color); chute.visible = false; model.add(chute); chute.position.y = 6.0;
+  const marker = diveMarker(p.name, p.color); marker.visible = false; model.add(marker); marker.position.y = 9.6;
+  const trail = new Trail(R.scene, p.color);
+  const o = { chute, marker, trail, model, p: sp.slice(), tp: sp.slice(), yaw: 0, pitch: 0, hp: 20, swing: 0, dead: false, hurtT: 0, heldId: undefined };
   others.set(id, o); return o;
 }
-function removeOther(id) { const o = others.get(id); if (o) R.scene.remove(o.model); others.delete(id); }
+function removeOther(id) { const o = others.get(id); if (o) { R.scene.remove(o.model); o.trail?.dispose(); } others.delete(id); }
+// 降下中の目印：遠くでも同じ大きさで見える名前と矢印
+function diveMarker(name, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96; const g = c.getContext('2d');
+  g.font = '700 30px "Zen Kaku Gothic New", sans-serif'; const w = Math.min(240, g.measureText(name).width + 28);
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath(); g.roundRect(128 - w / 2, 4, w, 44, 10); g.fill();
+  g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(name, 128, 27);
+  g.beginPath(); g.moveTo(112, 56); g.lineTo(144, 56); g.lineTo(128, 88); g.closePath(); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, sizeAttenuation: false, depthTest: false, fog: false, transparent: true }));
+  sp.scale.set(0.16, 0.06, 1); sp.renderOrder = 20; return sp;
+}
 function setHeldModel(o, id) {
   if (o.heldId === id) return; o.heldId = id;
   const h = o.model.userData.held; h.clear(); if (!id) return;
@@ -408,7 +422,7 @@ function respawn() {
   dead = false; hp = 20; food = 20; sat = 5; exhaust = 0; lastAttacker = null;
   const r = borderR(); let best = null, bd = -1;
   for (let k = 0; k < 24; k++) {
-    const a = Math.random() * Math.PI * 2, rr = Math.random() * Math.min(28, r - 4);
+    const a = Math.random() * Math.PI * 2, rr = Math.random() * Math.min(WS * 0.22, r - 4);
     const x = Math.floor(WS / 2 + Math.cos(a) * rr), z = Math.floor(WS / 2 + Math.sin(a) * rr), y = world.top(x, z);
     if (y <= SEA || world.get(x, y + 1, z) || world.get(x, y + 2, z)) continue;
     let dmin = 99; for (const o of others.values()) dmin = Math.min(dmin, Math.hypot(o.p[0] - x, o.p[2] - z));
@@ -533,15 +547,16 @@ function renderBoard() {
   if (room.alive) { const L = document.createElement('div'); L.innerHTML = `<span>残り</span><b>${Object.keys(room.alive).length}人</b>`; $('board').prepend(L); }
 }
 function fmt(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-function borderR() { const t = gameT(); if (t < SHRINK) return 999; return Math.max(4, 76 - (t - SHRINK) / (DUR - SHRINK) * 72); }
+function borderR() { const t = gameT(); if (t < SHRINK) return 999; return Math.max(4, WS * 0.6 - (t - SHRINK) / (DUR - SHRINK) * (WS * 0.6 - 4)); }
 function zoneC() { return room?.zone || [WS / 2, WS / 2]; }
 function zoneDmg() { return 1 + Math.max(0, gameT() - SHRINK) / 120; }
 let out = false;
 
 // ---------- 一人称の手元（マイクラの腕振り） ----------
 const fpRoot = new THREE.Group(); R.fpScene.add(fpRoot);
-const myChute = makeParachute('#e84a3a'); myChute.visible = false; R.scene.add(myChute);
-let myModel = null, camBlend = 0; // 降下中は3人称（camBlend=1）、着地したら1人称へ
+let myChute = makeParachute('#e84a3a'); myChute.visible = false; R.scene.add(myChute);
+const myTrail = new Trail(R.scene, '#ffffff');
+let myModel = null, camBlend = 0, diveFog = 0; // 降下中は3人称（camBlend=1）、着地したら1人称へ
 const fpHold = new THREE.Group(); fpRoot.add(fpHold);
 let swingT = -1, equipT = 1, lastHeldKey = '';
 function updateFP() {
@@ -764,7 +779,11 @@ function frame(t) {
       else { o.model.rotation.z = 0; o.model.visible = true; }
       if (o.swing > 0) { o.swing += dt / 0.3; if (o.swing >= 1) o.swing = 0; }
       o.hurtT = Math.max(0, (o.hurtT || 0) - dt); tintModel(o.model, o.hurtT > 0);
-      animateCharacter(o.model, Math.hypot(o.p[0] - prev[0], o.p[2] - prev[2]) / Math.max(dt, 1e-3), dt, o.swing > 0 ? Math.sin(Math.sqrt(o.swing) * Math.PI) : 0);
+      o.marker.visible = o.chute.visible;
+      if (o.chute.visible) { const dy = o.yaw - (o.lastYaw ?? o.yaw); o.lastYaw = o.yaw; swayParachute(o.chute, dt, Math.max(-1, Math.min(1, dy * 20))); o.trail.add(o.p[0], o.p[1] + 3, o.p[2], dt); o.model.userData.armL.rotation.x = o.model.userData.armR.rotation.x = -2.6; }
+      else if (o.trail.pts.length) o.trail.clear();
+      animateCharacter(o.model, o.chute.visible ? 0 : Math.hypot(o.p[0] - prev[0], o.p[2] - prev[2]) / Math.max(dt, 1e-3), dt, o.swing > 0 ? Math.sin(Math.sqrt(o.swing) * Math.PI) : 0);
+      if (o.chute.visible) { o.model.userData.armL.rotation.x = o.model.userData.armR.rotation.x = -2.6; }
     }
     updateArrows(dt);
     // カメラ（被弾で傾く・走ると視野が広がる）
@@ -782,7 +801,7 @@ function frame(t) {
       if (player.para) { myModel.userData.armL.rotation.x = -2.6; myModel.userData.armR.rotation.x = -2.6; }
     }
     if (camBlend > 0) {
-      const d = player.dir(), back = 7.5, up = 2.2;
+      const d = player.dir(), back = 11, up = 3.2;
       const tp = [player.p[0] - d[0] * back, player.p[1] + 1.4 - d[1] * back + up, player.p[2] - d[2] * back];
       const u = camBlend * camBlend * (3 - 2 * camBlend);
       cam.position.set(e[0] + (tp[0] - e[0]) * u, e[1] + (tp[1] - e[1]) * u, e[2] + (tp[2] - e[2]) * u);
@@ -790,7 +809,16 @@ function frame(t) {
     const wantFov = 75 * (player.sprinting ? 1.12 : 1) * (bowCharge >= 0 ? 1 - bowCharge * 0.15 : 1);
     fov += (wantFov - fov) * Math.min(1, dt * 8); if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     fpRoot.visible = !spectator && !dead && camBlend < 0.05; animFP(dt);
-    if (myChute.visible) { if (!player.para) myChute.visible = false; myChute.position.set(player.p[0], player.p[1] + 4.1, player.p[2]); myChute.rotation.y = player.yaw; }
+    if (myChute.visible) {
+      if (!player.para) { myChute.visible = false; myTrail.clear(); }
+      myChute.position.set(player.p[0], player.p[1] + 6.0, player.p[2]); myChute.rotation.y = player.yaw;
+      swayParachute(myChute, dt, (player.input.s || 0)); 
+    }
+    // 空の上にいる間は遠くまで見えるように
+    // 降下中だけ霧を薄くして遠くの相手を見やすく（着地したら通常に戻す）
+    const anyDive = (player.para && !spectator) || [...others.values()].some(o => o.chute.visible && spectator);
+    diveFog += ((anyDive ? 1 : 0) - diveFog) * Math.min(1, dt * 1.5);
+    R.scene.fog.near = 40 + diveFog * 60; R.scene.fog.far = 150 + diveFog * 170;
     const ch = attackCharge(); $('atkbar').hidden = ch >= 1 || spectator || dead; $('atkfill').style.width = `${ch * 100}%`;
     nameT -= dt; $('itemname').style.opacity = Math.max(0, Math.min(1, nameT));
     const left = tg < 0 ? -tg : DUR - tg;

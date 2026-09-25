@@ -91,6 +91,11 @@ export class Renderer {
     const c = this.camera.position;
     this.sun.position.set(c.x + this.sunDir.x * 120, c.y + this.sunDir.y * 120, c.z + this.sunDir.z * 120); this.sun.target.position.set(c.x, c.y, c.z);
     this.sky.position.copy(c); this.clouds.position.x = (t * 0.6) % 200;
+    // 霧で見えないチャンクは描かない
+    if ((this.cullN = (this.cullN || 0) + 1) % 10 === 0) {
+      const far = this.scene.fog.far + 12;
+      for (const [key, ms] of this.meshes) { const [cx, cz] = key.split(',').map(Number); const dx = cx * CS + 8 - c.x, dz = cz * CS + 8 - c.z; const v = dx * dx + dz * dz < far * far; for (const m of ms) m.visible = v; }
+    }
     this.r.render(this.scene, this.camera);
     this.r.autoClear = false; this.r.clearDepth(); this.r.render(this.fpScene, this.fpCam); this.r.autoClear = true;
   }

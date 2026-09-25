@@ -1,7 +1,7 @@
 // 小さな島の世界（96×96×48）をシードから作る
 import { B, BLOCKS } from './blocks.js';
 
-export const WS = 128, WH = 48, CS = 16, SEA = 17;
+export const WS = 160, WH = 48, CS = 16, SEA = 17;
 
 export function mulberry(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
@@ -92,16 +92,17 @@ export class World {
         }
       }
     };
-    vein(B.coal_ore, 270, 34, 7); vein(B.iron_ore, 215, 26, 5); vein(B.diamond_ore, 54, 12, 3);
+    const A = (WS * WS) / (96 * 96); // 面積に比例して増やす
+    vein(B.coal_ore, 150 * A | 0, 34, 7); vein(B.iron_ore, 120 * A | 0, 26, 5); vein(B.diamond_ore, 30 * A | 0, 12, 3);
     // 砂利：水辺と地中
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 40 * A; i++) {
       const cx = r() * WS | 0, cz = r() * WS | 0, h = hm[cz * WS + cx];
       for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) { const x = cx + dx, z = cz + dz; if (!this.inside(x, z) || r() < 0.3) continue; const y = hm[z * WS + x]; if (y <= SEA + 1 && this.get(x, y, z) === B.sand) put(x, y, z, B.gravel); }
       if (h > 8) vein(B.gravel, 1, h - 3, 10);
     }
     // 洞窟のクモの巣（糸が取れる）
     let webs = 0;
-    for (let k = 0; k < 10000 && webs < 64; k++) {
+    for (let k = 0; k < 6000 * A && webs < 36 * A; k++) {
       const x = 2 + (r() * (WS - 4) | 0), z = 2 + (r() * (WS - 4) | 0), y = 3 + (r() * 22 | 0);
       if (this.get(x, y, z) || y >= hm[z * WS + x] - 2) continue;
       const solidN = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1]].filter(([a, b, c]) => { const v = this.get(x + a, y + b, z + c); return v && v !== B.water; }).length;
