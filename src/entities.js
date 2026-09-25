@@ -67,7 +67,9 @@ export function animateCharacter(ch, speed, dt, swing = 0) {
 
 // ---- パラシュート（ラムエア型：弧を描く翼に、空気を取り込むセルと吊りひも） ----
 export function makeParachute(color = '#e84a3a') {
-  const g = new THREE.Group(), canopy = new THREE.Group(); g.add(canopy);
+  // 揺れの支点はキャラの肩（吊りひもの下端）。翼とひもをまとめてそこを中心に傾けるので、ひもが肩から外れない
+  const HANG = 4.6, g = new THREE.Group(), pivot = new THREE.Group(), canopy = new THREE.Group();
+  pivot.position.y = -HANG; canopy.position.y = HANG; pivot.add(canopy); g.add(pivot);
   const main = new THREE.Color(color), white = new THREE.Color(0xf6f2ea), dark = main.clone().multiplyScalar(0.45);
   const N = 9, span = 7.2, R = 5.2, chord = 2.9, thick = 0.5;
   const pos = [], col = [], idx = [];
@@ -90,18 +92,17 @@ export function makeParachute(color = '#e84a3a') {
   mesh.castShadow = true; canopy.add(mesh);
   // 吊りひも：翼の下面からキャラの肩へ
   const lp = [];
-  for (let i = 0; i <= N; i += 1.5) for (const z of [-chord * 0.35, chord * 0.35]) { const B = arc(i / N, -thick / 2); lp.push(B[0], B[1], z, Math.sign(B[0]) * 0.25, -4.6, 0); }
+  for (let i = 0; i <= N; i += 1.5) for (const z of [-chord * 0.35, chord * 0.35]) { const B = arc(i / N, -thick / 2); lp.push(B[0], B[1], z, Math.sign(B[0]) * 0.25, -HANG, 0); }
   const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
   canopy.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x2a2a2a, transparent: true, opacity: 0.7, fog: false })));
-  g.userData = { canopy, t: Math.random() * 10 };
+  g.userData = { pivot, t: Math.random() * 10 };
   return g;
 }
 // 揺れ（ふわふわ・向きを変えると傾く）
 export function swayParachute(g, dt, turn = 0) {
   const u = g.userData; u.t += dt;
-  u.canopy.rotation.z = Math.sin(u.t * 1.3) * 0.06 - turn * 0.25;
-  u.canopy.rotation.x = Math.sin(u.t * 0.9) * 0.04;
-  u.canopy.position.y = Math.sin(u.t * 1.7) * 0.08;
+  u.pivot.rotation.z = Math.sin(u.t * 1.3) * 0.06 - turn * 0.25;
+  u.pivot.rotation.x = Math.sin(u.t * 0.9) * 0.04;
 }
 // 降下の軌跡（遠くからでも位置がわかる色つきの帯）
 export class Trail {
