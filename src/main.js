@@ -831,7 +831,7 @@ function frame(t) {
     else if (tg < SHRINK) { ph.textContent = `戦闘中・安全地帯の縮小まで${fmt(SHRINK - tg)}`; ph.className = 'phase fight'; }
     else if (out && !spectator) { const zc = zoneC(); ph.textContent = `安全地帯の外！ 中心まで${Math.round(Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]))}m`; ph.className = 'phase danger'; }
     else { ph.textContent = '安全地帯が縮小中'; ph.className = 'phase border'; }
-    if (player.para && !spectator) { ph.textContent = tg < 0 ? 'まもなく降下' : 'パラシュート降下中（WASDで向きを変える）'; ph.className = 'phase'; }
+    if (player.para && !spectator) { ph.textContent = tg < 0 ? 'まもなく降下' : 'パラシュート降下中（マウスで向き・WASDで移動）'; ph.className = 'phase'; }
     if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); }
     if (tg >= SAFE && !announced.fight) { announced.fight = true; S.gong(); feed('<b>戦闘開始！</b>'); }
     if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed('<b>安全地帯が縮み始めた！</b> 赤い壁の外にいると体力が減ります'); }
