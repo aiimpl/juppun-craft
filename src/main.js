@@ -17,7 +17,7 @@ const R = new Renderer($('gl'), { mobile });
 const S = new Sound();
 const MAXP = location.search.includes('max1') ? 1 : 4; // 検証用に ?max1 で定員1人
 // 検証用：?debug で時間を短くする（部屋主の設定が全員に配られる）
-const CFG = location.search.includes('debug') ? { DUR: 120, SAFE: 12, SHRINK: 40 } : { DUR: 600, SAFE: 120, SHRINK: 180 };
+const CFG = location.search.includes('film') ? { DUR: 150, SAFE: 20, SHRINK: 45 } : location.search.includes('debug') ? { DUR: 120, SAFE: 12, SHRINK: 40 } : { DUR: 600, SAFE: 120, SHRINK: 180 };
 let DUR = CFG.DUR, SAFE = CFG.SAFE, SHRINK = CFG.SHRINK;
 function applyCfg() { if (room?.cfg) ({ DUR, SAFE, SHRINK } = room.cfg); }
 const COLORS = ['#ffd24a', '#7fd3ff', '#ff8fa8', '#a8f08a', '#d8a8ff', '#ffb070'];
@@ -328,7 +328,7 @@ function enterGame(modList, itemList) {
   syncOthers(); renderHotbar(); renderStats(); renderBoard();
   $('spect').hidden = !spectator; $('hotbarWrap').hidden = spectator;
   if (spectator) { const pos = room.queue.indexOf(myId) + 1; $('spect').textContent = `観戦中：いまの試合が終わったら参加できます（待ち ${Math.max(1, pos - MAXP)}番目）`; }
-  $('touch').hidden = !mobile; $('hint').hidden = mobile || spectator; setTimeout(() => $('hint').hidden = true, 20000);
+  $('touch').hidden = !mobile; $('hint').hidden = true; hintShown = false;
   announced.start = announced.fight = announced.shrink = false;
   S.ambient('day'); lockPointer();
 }
@@ -445,7 +445,7 @@ function onDied(m) {
 function tickFood(dt) {
   if (exhaust >= 4) { exhaust -= 4; if (sat > 0) sat = Math.max(0, sat - 1); else food = Math.max(0, food - 1); renderStats(); }
   regenT += dt;
-  if (food >= 18 && hp < 20 && regenT > (sat > 0 && food >= 20 ? 0.5 : 4)) { regenT = 0; hp = Math.min(20, hp + 1); exhaust += 6; renderStats(); }
+  if (food >= 18 && hp < 20 && regenT > (sat > 0 && food >= 20 ? 1.5 : 4)) { regenT = 0; hp = Math.min(20, hp + 1); exhaust += 6; renderStats(); }
   else if (food === 0 && regenT > 4) { regenT = 0; if (hp > 1) hurt(1, null, null, 'hunger'); }
 }
 
@@ -556,7 +556,7 @@ let out = false;
 const fpRoot = new THREE.Group(); R.fpScene.add(fpRoot);
 let myChute = makeParachute('#e84a3a'); myChute.visible = false; R.scene.add(myChute);
 const myTrail = new Trail(R.scene, '#ffffff');
-let myModel = null, camBlend = 0, diveFog = 0; // 降下中は3人称（camBlend=1）、着地したら1人称へ
+let myModel = null, camBlend = 0, diveFog = 0, hintShown = false; // 降下中は3人称（camBlend=1）、着地したら1人称へ
 const fpHold = new THREE.Group(); fpRoot.add(fpHold);
 let swingT = -1, equipT = 1, lastHeldKey = '';
 function updateFP() {
@@ -809,6 +809,8 @@ function frame(t) {
     const wantFov = 75 * (player.sprinting ? 1.12 : 1) * (bowCharge >= 0 ? 1 - bowCharge * 0.15 : 1);
     fov += (wantFov - fov) * Math.min(1, dt * 8); if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     fpRoot.visible = !spectator && !dead && camBlend < 0.05; animFP(dt);
+    // 操作説明は着地してから15秒だけ出す
+    if (!hintShown && !player.para && !spectator && !mobile && tg > 0) { hintShown = true; $('hint').hidden = false; setTimeout(() => $('hint').hidden = true, 15000); }
     if (myChute.visible) {
       if (!player.para) { myChute.visible = false; myTrail.clear(); }
       myChute.position.set(player.p[0], player.p[1] + 6.0, player.p[2]); myChute.rotation.y = player.yaw;
@@ -844,7 +846,12 @@ function frame(t) {
 }
 function tintModel(model, on) {
   if (model.userData.tinted === on) return; model.userData.tinted = on;
-  model.traverse(m => { if (!m.isMesh) return; for (const x of Array.isArray(m.material) ? m.material : [m.material]) x.emissive?.set(on ? 0xb00000 : 0x000000); });
+  const held = model.userData.held;
+  model.traverse(m => {
+    if (!m.isMesh) return;
+    for (let p = m; p; p = p.parent) if (p === held) return; // 手に持った物（共有の材質）は染めない
+    for (const x of Array.isArray(m.material) ? m.material : [m.material]) x.emissive?.set(on ? 0xb00000 : 0x000000);
+  });
 }
 requestAnimationFrame(frame);
 // 部屋主のタブが裏に回っても試合は終わるように
