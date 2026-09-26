@@ -341,6 +341,7 @@ function enterGame(modList, itemList) {
   player = new Player(world); hookPlayer();
   inv.clear(); inv.sel = 0; inv.onChange = renderHotbar;
   hp = 20; food = 20; sat = 5; exhaust = 0; dead = false; protectUntil = 0; lastAttacker = null;
+  $('centerMsg').hidden = true; // やられてすぐ試合が終わると「やられた」が残るので消す
   const sp = world.corner(room.roster[myId] ?? 0);
   player.place(spectator ? [WS / 2, 60, WS / 2 + 40] : sp, Math.atan2(sp[0] - WS / 2, sp[2] - WS / 2));
   player.para = !spectator; player.pitch = spectator ? -0.6 : -0.5;
