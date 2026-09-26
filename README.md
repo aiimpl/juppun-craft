@@ -5,6 +5,8 @@
 
 **ブラウザで遊ぶ：https://aiimpl.github.io/juppun-craft/**
 
+（English: the game picks your browser’s language automatically, and the title screen has a language button. See [English](#english) below.）
+
 ## ルール
 - 島は試合ごとに自動で生成します（160×160ブロック。平原・森・砂浜・洞窟・鉱石）
 - 全員がパラシュートで島の四隅の上空から降下します（降下中は後ろからの視点、着地すると目線の視点に固定）。降下中はほかの人のパラシュートに名前の目印と軌跡が出て、遠くからでも見えます
@@ -77,5 +79,15 @@
 | DotGothic16 | `fonts/dotgothic16/` | SIL Open Font License 1.1 |
 
 テクスチャ・アイテムの絵・効果音はすべてコードで作っていて、画像や音声のファイルは使っていません。
+
+## English
+**Juppun Craft** — a 10-minute block battle royale you can play in your browser. Up to 4 players per match.
+
+- **Play:** https://aiimpl.github.io/juppun-craft/ — no sign-up. The language follows your browser, and you can switch it on the title screen.
+- **How a match goes:** all players parachute onto the four corners of a 160×160 island. The first 2 minutes are prep time with no attacking, so chop trees, craft tools, and mine stone and iron. From 3 minutes a red safe zone closes in on a random center, and standing outside it drains your health. Two chests are hidden on the island — one in a cave, one under thick leaves — holding a bow and arrows, a shield, apples, swords and, rarely, diamond gear. Beat everyone and you are the last one standing; if 10 minutes run out, the survivor with the most kills wins.
+- **Rooms:** "Play with anyone" drops you into an open room, or opens one for you. "Join with password" puts everyone who types the same word in the same room. You can also send an invite link. Four play per match; from the fifth player on you spectate and join the next one.
+- **Controls:** WASD move, Space jump, hold Ctrl to run, Shift to sneak, left click to mine or attack, right click to place, use, eat, draw a bow or raise a shield, E for the inventory, Q to drop, 1–9 to switch. Touch controls appear on phones.
+- **How it runs:** browsers connect to each other over WebRTC and the host's browser acts as the server, so there is no game server. PeerJS's public server is used only to introduce peers. When the host closes the tab, the room is gone.
+- **Assets:** every texture, item sprite and sound is generated in code. There are no image or audio files in this repository.
 
 Built with Claude Opus 5.5.

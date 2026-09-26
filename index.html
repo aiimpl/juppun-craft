@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>じゅっぷんクラフト</title>
-<meta name="description" content="10分で集めて、作って、戦う。ブラウザで最大4人のブロック対戦サバイバル。">
+<meta name="description" content="10分で集めて、作って、戦う。ブラウザで最大4人のブロック対戦サバイバル。 / Gather, craft and fight in 10 minutes. A block battle royale for up to 4 players, right in the browser.">
 <meta property="og:title" content="じゅっぷんクラフト">
-<meta property="og:description" content="10分で集めて、作って、戦う。リンクを送るだけで最大4人のブロック対戦。">
+<meta property="og:description" content="10分で集めて、作って、戦う。リンクを送るだけで最大4人のブロック対戦。 / Gather, craft and fight in 10 minutes. Send one link and up to 4 players join.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://aiimpl.github.io/juppun-craft/ogp.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -22,7 +22,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block}
 .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
 [hidden]{display:none!important}
-.card{width:min(560px,100%);max-height:100%;overflow:auto;background:rgba(22,26,32,.9);border:2px solid rgba(255,255,255,.12);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.card{position:relative;width:min(560px,100%);max-height:100%;overflow:auto;background:rgba(22,26,32,.9);border:2px solid rgba(255,255,255,.12);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .logo{font-family:var(--pix);font-size:clamp(34px,8vw,52px);line-height:1.05;margin:0;letter-spacing:.02em;text-shadow:3px 3px 0 #000}
 .logo span{color:var(--accent)}
 .sub{color:#cfc8b8;margin:10px 0 18px;line-height:1.7;font-size:15px}
@@ -85,6 +85,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .bowbar{position:absolute;left:50%;top:calc(50% + 24px);width:60px;height:5px;margin-left:-30px;background:rgba(0,0,0,.5);border-radius:3px;overflow:hidden}
 .bowbar i{display:block;height:100%;background:#fff;width:0}
 .spect{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--glass2);border-radius:10px;padding:8px 14px;font-size:14px}
+.langbtn{position:absolute;top:12px;right:12px;z-index:3}
 /* 持ち物画面 */
 .guiBack{background:rgba(0,0,0,.55);z-index:20}
 .gui{position:relative;background:#c6c6c6;border-radius:calc(var(--k)*3px);box-shadow:inset calc(var(--k)*2px) calc(var(--k)*2px) 0 #fff,inset calc(var(--k)*-2px) calc(var(--k)*-2px) 0 #555,0 0 0 calc(var(--k)*1px) #000;color:#404040;image-rendering:pixelated}
@@ -142,46 +143,47 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 
 <section id="title" class="screen">
   <div class="card">
-    <h1 class="logo">じゅっぷん<br><span>クラフト</span></h1>
-    <p class="sub">パラシュートで降りて、集めて、作って、戦う。<br>最後の1人がドン勝。リンクを送るだけで最大4人のバトロワ。</p>
+    <button class="btn ghost small langbtn" id="bLang" data-t="btn.lang"></button>
+    <h1 class="logo" data-t="logo"></h1>
+    <p class="sub" data-t="sub"></p>
     <div id="joinBox" class="row" hidden><b id="joinLabel"></b></div>
-    <label class="f">名前</label>
-    <input type="text" id="name" maxlength="10" placeholder="10文字まで">
-    <label class="f">キャラクター</label>
+    <label class="f" data-t="f.name"></label>
+    <input type="text" id="name" maxlength="10" data-tp="ph.name">
+    <label class="f" data-t="f.char"></label>
     <div class="chars" id="chars"></div>
     <div class="row" style="margin-top:18px">
-      <button class="btn primary" id="bJoin" hidden>招待された部屋に入る</button>
-      <button class="btn primary" id="bQuick">だれかと対戦する</button>
-      <button class="btn ghost" id="bSolo">ひとりで練習</button>
+      <button class="btn primary" id="bJoin" hidden data-t="btn.join"></button>
+      <button class="btn primary" id="bQuick" data-t="btn.quick"></button>
+      <button class="btn ghost" id="bSolo" data-t="btn.solo"></button>
     </div>
-    <label class="f">友達と遊ぶ</label>
+    <label class="f" data-t="f.friends"></label>
     <form class="row wordrow" id="wordForm" style="margin-top:0">
-      <input type="text" id="word" maxlength="20" placeholder="あいことば（例：たぬき123）" enterkeyhint="go">
-      <button class="btn" id="bWord">あいことばで入る</button>
+      <input type="text" id="word" maxlength="20" data-tp="ph.word" enterkeyhint="go">
+      <button class="btn" id="bWord" data-t="btn.word"></button>
     </form>
-    <div class="row" style="margin-top:0"><button class="btn ghost small" id="bHost">招待リンクを作る</button><span class="note">同じあいことばを入れた人どうしが同じ部屋に入ります</span></div>
+    <div class="row" style="margin-top:0"><button class="btn ghost small" id="bHost" data-t="btn.host"></button><span class="note" data-t="note.word"></span></div>
     <div class="rules">
-      <b>ルール</b>　全員がパラシュートで島の四隅に降下。最初の2分は準備時間（攻撃できません）。木を切って道具を作り、石や鉄を掘って武器を強くしよう。3分から赤い安全地帯がどんどん狭まり、外にいると体力が減ります。倒されたら脱落（持ち物はその場に落ちます）。<b>最後の1人がドン勝</b>。10分たっても決着しなければ、生き残りのうち倒した数が多い人の勝ち。<br>
-      <b>定員4人</b>。5人目からは観戦しながら待ち、次の試合から入れます。
+      <b data-t="rules.t"></b><span data-t="rules.body"></span><br>
+      <span data-t="rules.cap"></span>
     </div>
-    <p class="note">通信はブラウザ同士を直接つなぎます（接続の仲介に PeerJS の公開サーバーを使います）。会社や学校のネットワークではつながらないことがあります。</p>
+    <p class="note" data-t="note.net"></p>
   </div>
 </section>
 
 <section id="lobby" class="screen" hidden>
   <div class="card">
-    <h2 style="margin:0 0 6px" id="lobbyTitle">待合室</h2>
+    <h2 style="margin:0 0 6px" id="lobbyTitle" data-t="lobby.wait"></h2>
     <div class="note" id="wordShow" hidden></div>
     <div class="note" id="lobbyNote"></div>
     <div id="shareBox">
-      <label class="f">このリンクを送ると、同じ部屋に入れます</label>
+      <label class="f" data-t="lobby.share"></label>
       <div class="link" id="roomLink"></div>
-      <div class="row"><button class="btn small" id="bCopy">コピー</button><button class="btn small" id="bShare" hidden>共有</button></div>
+      <div class="row"><button class="btn small" id="bCopy" data-t="btn.copy"></button><button class="btn small" id="bShare" hidden data-t="btn.share"></button></div>
     </div>
-    <label class="f">参加者（<span id="pcount"></span>）</label>
+    <label class="f"><span data-t="f.players"></span>（<span id="pcount"></span>）</label>
     <div class="plist" id="plist"></div>
-    <div class="row"><button class="btn primary" id="bStart" hidden>試合を始める</button><span id="waitHost" class="note" hidden>部屋を作った人が始めるのを待っています…</span></div>
-    <div class="row"><button class="btn ghost small" id="bLeave">タイトルへ</button></div>
+    <div class="row"><button class="btn primary" id="bStart" hidden data-t="btn.start"></button><span id="waitHost" class="note" hidden data-t="lobby.waitHost"></span></div>
+    <div class="row"><button class="btn ghost small" id="bLeave" data-t="btn.title"></button></div>
   </div>
 </section>
 
@@ -201,27 +203,27 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
   <div class="hurt" id="hurt"></div>
   <div class="center" id="centerMsg" hidden><div class="big" id="bigMsg"></div><div id="smallMsg"></div></div>
   <div class="hint" id="hint" hidden>
-    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> ジャンプ　<kbd>E</kbd> 持ち物（2×2クラフト）　作業台・かまどは右クリックで開く　<kbd>1</kbd>〜<kbd>9</kbd> 持ち替え<br>
-    左クリック 掘る・攻撃　右クリック 置く・使う・食べる　<kbd>Q</kbd> 捨てる　<kbd>Shift</kbd> しゃがむ　<kbd>Ctrl</kbd>を押している間 走る<br>
-    弓：矢を持った状態で右クリックを押してひきしぼり、離すと飛ぶ　盾：右クリックでかまえる　宝箱：島に2つ（右クリックで開く）
+    <span data-t="hint.1"></span><br>
+    <span data-t="hint.2"></span><br>
+    <span data-t="hint.3"></span>
   </div>
   <div class="touch" id="touch" hidden>
     <div class="stick" id="stick"><i></i></div>
-    <div class="tbtns"><button class="tb" id="tAtk">攻撃</button><button class="tb big" id="tJump">跳ぶ</button><button class="tb" id="tUse">置く</button><button class="tb" id="tSneak">しゃがむ</button></div>
-    <div class="tside"><button class="tinv" id="tInv">持物</button><button class="tinv" id="tDrop">捨てる</button></div>
+    <div class="tbtns"><button class="tb" id="tAtk" data-t="tb.atk"></button><button class="tb big" id="tJump" data-t="tb.jump"></button><button class="tb" id="tUse" data-t="use.place"></button><button class="tb" id="tSneak" data-t="tb.sneak"></button></div>
+    <div class="tside"><button class="tinv" id="tInv" data-t="tb.inv"></button><button class="tinv" id="tDrop" data-t="tb.drop"></button></div>
   </div>
 </div>
 
 <section id="gui" class="screen guiBack" hidden></section>
-<button class="tclose" id="tClose" hidden>閉じる</button>
+<button class="tclose" id="tClose" hidden data-t="tb.close"></button>
 
 <section id="result" class="screen" hidden>
   <div class="card">
-    <h2 id="winTitle" class="win">試合終了</h2>
+    <h2 id="winTitle" class="win" data-t="res.over"></h2>
     <div class="rank" id="rank"></div>
     <div class="note" id="resNote"></div>
-    <div class="row"><button class="btn primary" id="bAgain" hidden>もう一度（同じ部屋で）</button><span class="note" id="resWait"></span></div>
-    <div class="row"><button class="btn ghost small" id="bResTitle">タイトルへ</button></div>
+    <div class="row"><button class="btn primary" id="bAgain" hidden data-t="btn.again"></button><span class="note" id="resWait"></span></div>
+    <div class="row"><button class="btn ghost small" id="bResTitle" data-t="btn.title"></button></div>
   </div>
 </section>
 

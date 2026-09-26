@@ -11,8 +11,10 @@ import { CHARS, makeCharacter, animateCharacter, drawTag, makeArrow, makeParachu
 import { Sound } from './audio.js';
 import { Net, codeFromWord, PUBLIC_SLOTS } from './net.js';
 import { rollLoot } from './loot.js';
+import { t, lang, setLang, applyNames, applyStatic } from './i18n.js';
 
 const $ = id => document.getElementById(id);
+applyNames(ITEMS, CHARS); applyStatic(document); // 先に言語を決めてから画面を作る
 const mobile = matchMedia('(pointer: coarse)').matches;
 const R = new Renderer($('gl'), { mobile });
 const S = new Sound();
@@ -45,7 +47,7 @@ const screens = ['title', 'lobby', 'result'];
 function show(id) { for (const s of screens) $(s).hidden = s !== id; }
 function notice(msg, reload = false) {
   const d = document.createElement('div'); d.className = 'notice';
-  d.innerHTML = `<div>${msg}</div><button class="btn small">${reload ? 'タイトルへ' : 'OK'}</button>`;
+  d.innerHTML = `<div>${msg}</div><button class="btn small">${reload ? t('btn.title') : 'OK'}</button>`;
   d.querySelector('button').onclick = () => { if (reload) { location.hash = ''; location.reload(); } else d.remove(); };
   document.body.appendChild(d);
 }
@@ -78,7 +80,7 @@ function saveMe() {
   try { localStorage.setItem('jc:name', $('name').value.trim()); localStorage.setItem('jc:char', me.char); } catch (e) { }
 }
 const joinCode = new URLSearchParams(location.hash.slice(1)).get('r');
-if (joinCode) { $('joinBox').hidden = false; $('joinLabel').textContent = `部屋「${joinCode}」に招待されています`; $('bJoin').hidden = false; $('bHost').classList.remove('primary'); }
+if (joinCode) { $('joinBox').hidden = false; $('joinLabel').textContent = t('lobby.invited', joinCode); $('bJoin').hidden = false; $('bHost').classList.remove('primary'); }
 // 部屋を作る／入る（kind: 'link'＝リンクで招待、'word'＝あいことば、'pub'＝だれでも参加）
 async function becomeHost(code, kind, label) {
   net = new Net(); bindNet(); await net.host(code);
@@ -96,34 +98,34 @@ async function joinRoom(code) {
 function syncClock() { for (let i = 0; i < 5; i++) setTimeout(() => net?.send('h', { t: 'ping', c: performance.now() }), i * 300); }
 function busy(btn, text) { const old = btn.textContent; btn.disabled = true; btn.textContent = text; return () => { btn.disabled = false; btn.textContent = old; }; }
 $('bHost').onclick = async () => {
-  S.init(); saveMe(); const done = busy($('bHost'), '部屋を作っています…');
+  S.init(); saveMe(); const done = busy($('bHost'), t('busy.host'));
   try { await becomeHost(Math.random().toString(36).slice(2, 8), 'link'); }
-  catch (e) { notice('部屋を作れませんでした。時間をおいて試してください。'); console.error(e); }
+  catch (e) { notice(t('err.host')); console.error(e); }
   finally { done(); }
 };
 $('bJoin').onclick = async () => {
-  S.init(); saveMe(); const done = busy($('bJoin'), 'つないでいます…');
+  S.init(); saveMe(); const done = busy($('bJoin'), t('busy.join'));
   try { await joinRoom(joinCode); }
-  catch (e) { notice('部屋に入れませんでした。部屋が閉じているか、ネットワークでつながらない可能性があります。'); console.error(e); net?.close(); net = null; }
+  catch (e) { notice(t('err.join')); console.error(e); net?.close(); net = null; }
   finally { done(); }
 };
 // あいことば：同じ言葉なら同じ部屋。部屋がなければ自分が部屋主になる
 $('wordForm').onsubmit = async e => {
   e.preventDefault(); S.init(); saveMe();
   const word = $('word').value.trim(); if (!word) { $('word').focus(); return; }
-  const code = codeFromWord(word), done = busy($('bWord'), 'さがしています…');
+  const code = codeFromWord(word), done = busy($('bWord'), t('busy.word'));
   try {
     for (let k = 0; k < 3; k++) {
       try { await joinRoom(code); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'peer-unavailable') throw err; }
       try { await becomeHost(code, 'word', word); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'unavailable-id') throw err; }
     }
     throw new Error('retry');
-  } catch (err) { notice('部屋に入れませんでした。もう一度試すか、別のあいことばにしてください。'); console.error(err); }
+  } catch (err) { notice(t('err.word')); console.error(err); }
   finally { done(); }
 };
 // だれでも参加：待合室のある公開部屋→試合中の部屋（観戦して待つ）→なければ自分が部屋を開く
 $('bQuick').onclick = async () => {
-  S.init(); saveMe(); const done = busy($('bQuick'), '対戦相手をさがしています…');
+  S.init(); saveMe(); const done = busy($('bQuick'), t('busy.quick'));
   const slots = [...Array(PUBLIC_SLOTS).keys()].map(i => 'pub' + i);
   try {
     for (const pass of [1, 2]) {
@@ -135,8 +137,8 @@ $('bQuick').onclick = async () => {
         try { await becomeHost(r.empty, 'pub'); return; } catch (err) { net?.close(); net = null; if (err?.type !== 'unavailable-id') throw err; }
       }
     }
-    notice('いまは入れる部屋がありません。少し待ってから試してください。');
-  } catch (err) { notice('つなげませんでした。ネットワークを確かめてください。'); console.error(err); net?.close(); net = null; }
+    notice(t('err.none'));
+  } catch (err) { notice(t('err.net')); console.error(err); net?.close(); net = null; }
   finally { done(); }
 };
 $('bSolo').onclick = () => {
@@ -148,8 +150,8 @@ $('bSolo').onclick = () => {
 // ---------- 通信 ----------
 function bindNet() {
   net.on.msg = (from, m) => isHost && from !== 'h' ? hostHandle(from, m) : clientHandle(m);
-  net.on.leave = id => { if (!isHost || !room.players[id]) return; releaseChests(id); feed(`${esc(room.players[id].name)} が抜けました`); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); if (room.alive?.[id]) { delete room.alive[id]; room.elim.push(id); } removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); checkEnd(); };
-  net.on.lost = () => { if (state !== 'title') notice('部屋との接続が切れました', true); };
+  net.on.leave = id => { if (!isHost || !room.players[id]) return; releaseChests(id); feed(t('feed.left', esc(room.players[id].name))); delete room.players[id]; room.queue = room.queue.filter(q => q !== id); if (room.alive?.[id]) { delete room.alive[id]; room.elim.push(id); } removeOther(id); bcast({ t: 'room', room }); if (state === 'lobby') showLobby(); checkEnd(); };
+  net.on.lost = () => { if (state !== 'title') notice(t('err.lost'), true); };
   net.on.error = e => console.warn('net', e?.type, e);
 }
 function toHost(m) { if (isHost) hostHandle('h', m); else net.send('h', m); }
@@ -158,7 +160,7 @@ function bcast(m, except) { if (net && !solo) net.broadcast(m, except); if (exce
 function toAll(m) { if (isHost) bcast({ ...m, id: 'h' }, 'h'); else net.send('h', m); }
 function addPlayer(id, name, char) {
   const used = Object.values(room.players).map(p => p.color);
-  let nm = String(name).slice(0, 10) || 'プレイヤー';
+  let nm = String(name).slice(0, 10) || t('player.default');
   const names = Object.values(room.players).map(p => p.name);
   for (let k = 2; names.includes(nm); k++) nm = String(name).slice(0, 8) + k;
   room.players[id] = { name: nm, char: (char | 0) % CHARS.length, kills: 0, deaths: 0, color: COLORS.find(c => !used.includes(c)) || '#fff' };
@@ -189,7 +191,7 @@ function hostHandle(from, m) {
       sendTo(from, { t: 'welcome', you: from, room, mods: [...mods], items: [...hostItems.values()] });
       bcast({ t: 'room', room }, from);
       if (state === 'lobby') showLobby();
-      feed(`${esc(m.name)} が入りました`);
+      feed(t('feed.joined', esc(m.name)));
       break;
     case 'ping': sendTo(from, { t: 'pong', c: m.c, h: now() }); break;
     case 'pos': bcast({ ...m, id: from }, from); break;
@@ -249,7 +251,7 @@ function clientHandle(m) {
   switch (m.t) {
     case 'welcome':
       myId = m.you; room = m.room; applyCfg();
-      if (room.phase === 'game') { enterGame(m.mods, m.items); feed('試合中です。観戦しながら次の試合を待ちます'); } else showLobby();
+      if (room.phase === 'game') { enterGame(m.mods, m.items); feed(t('feed.spectate')); } else showLobby();
       break;
     case 'pong': { const rtt = performance.now() - m.c; pingSamples.push({ rtt, off: m.h - (m.c + rtt / 2) }); pingSamples.sort((a, b) => a.rtt - b.rtt); clockOff = pingSamples[0].off; break; }
     case 'room': room = m.room; if (state === 'lobby' || (state === 'result' && room.phase === 'lobby')) showLobby(); if (state === 'play') { renderBoard(); syncOthers(); } break;
@@ -273,7 +275,7 @@ function clientHandle(m) {
     case 'arrow': if (m.id !== myId) spawnArrow(m.p, m.v, m.id, false); break;
     // 開けるより先に倒されたら、中身はそのまま部屋主に返す
     case 'chestData': if (state === 'play' && !dead && !spectator) openGui('chest', { k: m.k, slots: m.slots.map(x => x ? { ...x } : null) }); else toHost({ t: 'chestSet', k: m.k, slots: m.slots }); break;
-    case 'chestBusy': feed('だれかが開けています'); break;
+    case 'chestBusy': feed(t('feed.chestBusy')); break;
   }
 }
 
@@ -295,30 +297,31 @@ setInterval(() => {
 setInterval(() => { if (state === 'lobby' && room?.kind === 'pub') lobbyStatus(); }, 500);
 function lobbyStatus() {
   const n = room.queue.filter(id => room.players[id]).length;
-  $('lobbyNote').textContent = room.startAt ? `あと ${Math.max(0, Math.ceil((room.startAt - now()) / 1000))} 秒で試合が始まります（${n}/${MAXP}人）` : `対戦相手を待っています（${n}/${MAXP}人）。2人そろうと自動で始まります`;
+  $('lobbyNote').textContent = room.startAt ? t('lobby.startIn', Math.max(0, Math.ceil((room.startAt - now()) / 1000)), n, MAXP) : t('lobby.waiting', n, MAXP);
 }
 function showLobby() {
   state = 'lobby'; show('lobby'); $('hud').hidden = true; guiClose(); document.exitPointerLock?.();
   const url = `${location.origin}${location.pathname}#r=${room.code}`;
   $('shareBox').hidden = room.kind === 'pub';
-  $('wordShow').hidden = room.kind !== 'word'; if (room.kind === 'word') $('wordShow').innerHTML = `あいことば「<b>${esc(room.label || '')}</b>」の部屋です。同じあいことばを入れた人が入れます`;
-  $('lobbyTitle').textContent = room.kind === 'pub' ? 'だれでも参加の部屋' : '待合室';
+  $('wordShow').hidden = room.kind !== 'word'; if (room.kind === 'word') $('wordShow').innerHTML = t('lobby.word', esc(room.label || ''));
+  $('lobbyTitle').textContent = t(room.kind === 'pub' ? 'lobby.pub' : 'lobby.wait');
   $('roomLink').textContent = url; $('bShare').hidden = !navigator.share;
-  $('bCopy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('bCopy').textContent = 'コピーしました'; setTimeout(() => $('bCopy').textContent = 'コピー', 1500); } catch (e) { } };
-  $('bShare').onclick = () => navigator.share({ title: 'じゅっぷんクラフト', text: '10分サバイバル対戦しよう', url }).catch(() => { });
+  $('bCopy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('bCopy').textContent = t('btn.copied'); setTimeout(() => $('bCopy').textContent = t('btn.copy'), 1500); } catch (e) { } };
+  $('bShare').onclick = () => navigator.share({ title: document.title, text: t('share.text'), url }).catch(() => { });
   const ids = room.queue.filter(id => room.players[id]);
-  $('pcount').textContent = `${ids.length}人・次の試合は先頭の${Math.min(MAXP, ids.length)}人`;
+  $('pcount').textContent = t('lobby.count', ids.length, Math.min(MAXP, ids.length));
   $('plist').innerHTML = '';
   ids.forEach((id, i) => {
     const p = room.players[id], d = document.createElement('div');
-    d.append(faceCanvas(p.char)); const n = document.createElement('span'); n.innerHTML = `<b style="color:${p.color}">${esc(p.name)}</b>${id === myId ? '（あなた）' : ''}${id === 'h' ? '・部屋主' : ''}`; d.append(n);
-    const st = document.createElement('span'); st.className = 'st' + (i < MAXP ? ' play' : ''); st.textContent = i < MAXP ? '次の試合に参加' : `待ち ${i - MAXP + 1}番目`; d.append(st);
+    d.append(faceCanvas(p.char)); const n = document.createElement('span'); n.innerHTML = `<b style="color:${p.color}">${esc(p.name)}</b>${id === myId ? t('lobby.you') : ''}${id === 'h' ? t('lobby.host') : ''}`; d.append(n);
+    const st = document.createElement('span'); st.className = 'st' + (i < MAXP ? ' play' : ''); st.textContent = i < MAXP ? t('lobby.play') : t('lobby.waitN', i - MAXP + 1); d.append(st);
     $('plist').appendChild(d);
   });
   const pub = room.kind === 'pub';
   $('bStart').hidden = !isHost || pub; $('waitHost').hidden = isHost || pub;
-  if (pub) lobbyStatus(); else $('lobbyNote').textContent = isHost ? '人がそろったら「試合を始める」を押してください。1人でも始められます。' : '';
+  if (pub) lobbyStatus(); else $('lobbyNote').textContent = isHost ? t('lobby.hostNote') : '';
 }
+$('bLang').onclick = () => { setLang(lang === 'ja' ? 'en' : 'ja'); location.reload(); };
 $('bStart').onclick = () => { if (isHost) startMatch(); };
 $('bLeave').onclick = $('bResTitle').onclick = () => { net?.close(); location.hash = ''; location.reload(); };
 $('bAgain').onclick = () => { if (solo) return startMatch(); if (isHost) { room.phase = 'lobby'; bcast({ t: 'room', room }); showLobby(); } };
@@ -348,7 +351,7 @@ function enterGame(modList, itemList) {
   camBlend = spectator ? 0 : 1;
   syncOthers(); renderHotbar(); renderStats(); renderBoard();
   $('spect').hidden = !spectator; $('hotbarWrap').hidden = spectator;
-  if (spectator) { const pos = room.queue.indexOf(myId) + 1; $('spect').textContent = `観戦中：いまの試合が終わったら参加できます（待ち ${Math.max(1, pos - MAXP)}番目）`; }
+  if (spectator) { const pos = room.queue.indexOf(myId) + 1; $('spect').textContent = t('hud.spectQ', Math.max(1, pos - MAXP)); }
   $('touch').hidden = !mobile; $('hint').hidden = true; hintShown = false;
   announced.start = announced.fight = announced.shrink = false;
   S.ambient('day'); lockPointer();
@@ -416,7 +419,7 @@ function takeHit(m) {
     const d = player.dir();
     if (d[0] * (m.kx || 0) + d[2] * (m.kz || 0) < -0.1) {
       S.put(); debris.spawn(player.p[0], player.p[1] + 1.2, player.p[2], '#e8e8f0', 7, 0.7);
-      if (inv.wear(inv.main, inv.sel, 1)) { S.brk('wood'); feed('盾が壊れた'); }
+      if (inv.wear(inv.main, inv.sel, 1)) { S.brk('wood'); feed(t('feed.shieldBroke')); }
       player.push((m.kx || 0) * 2, (m.kz || 0) * 2, 1.5);
       return;
     }
@@ -442,11 +445,11 @@ function die(cause) {
   inv.clear();
   toHost({ t: 'died', killer, cause: killer ? null : cause, w: killer ? lastWeapon : null });
   respawnAt = performance.now() + 4000;
-  $('centerMsg').hidden = false; $('bigMsg').textContent = '脱落';
+  $('centerMsg').hidden = false; $('bigMsg').textContent = t('hud.elim');
 }
 function becomeSpectator() {
   spectator = true; dead = false; $('centerMsg').hidden = true; $('hotbarWrap').hidden = true;
-  $('spect').hidden = false; $('spect').textContent = '脱落しました。観戦中（自由に飛べます）';
+  $('spect').hidden = false; $('spect').textContent = t('hud.spectOut');
   player.p[1] += 6; player.para = false; myChute.visible = false;
 }
 function respawn() {
@@ -462,13 +465,13 @@ function respawn() {
   player.place(best || world.spawn(0), player.yaw);
   protectUntil = performance.now() + 3000; $('centerMsg').hidden = true; renderStats();
 }
-const CAUSE = { fall: '落ちて', border: '安全地帯の外で', hunger: '飢えて' };
+const CAUSE = { fall: 'die.fall', border: 'die.border', hunger: 'die.hunger' };
 function onDied(m) {
   const P = room.players[m.id], K = m.killer && room.players[m.killer];
   const nm = p => p ? `<b style="color:${p.color}">${esc(p.name)}</b>` : '？';
-  if (K) feed(`${nm(K)} が ${nm(P)} を倒した（${m.w ? ITEMS[m.w]?.name || '弓' : '素手'}）`);
-  else feed(`${nm(P)} が${CAUSE[m.cause] || ''}力尽きた`);
-  if (m.left != null && Object.keys(room.roster).length > 1) feed(`<b>残り ${m.left}人</b>`);
+  if (K) feed(t('feed.killed', nm(K), nm(P), m.w ? ITEMS[m.w]?.name || t('weapon.bow') : t('weapon.hand')));
+  else feed(t(CAUSE[m.cause] || 'die.other', nm(P)));
+  if (m.left != null && Object.keys(room.roster).length > 1) feed(t('feed.remain', m.left));
   if (m.killer === myId) S.kill();
   const o = others.get(m.id); if (o) debris.spawn(o.p[0], o.p[1] + 0.5, o.p[2], P ? P.color : '#fff', 18, 1.2);
 }
@@ -572,9 +575,9 @@ function renderHotbar() {
   for (let i = 0; i < HOT; i++) { const d = document.createElement('div'); d.className = 'hslot' + (i === inv.sel ? ' on' : ''); gui.fillSlot(d, inv.main[i]); d.onpointerdown = e => { e.stopPropagation(); selectSlot(i); }; hb.appendChild(d); }
   const h = inv.held(), name = h ? ITEMS[h.id].name : '';
   if ($('itemname').textContent !== name) { $('itemname').textContent = name; nameT = 2.5; }
-  $('tUse').textContent = !h ? '使う' : ITEMS[h.id].block ? '置く' : ITEMS[h.id].food ? '食べる' : ITEMS[h.id].bow ? '引く' : ITEMS[h.id].shield ? 'かまえる' : '使う';
-  if (h && ITEMS[h.id].bow && !bowTold) { bowTold = true; feed('<b>弓</b>：右クリックを押している間ひきしぼり、離すと矢が飛びます（矢が必要・長く引くほど強い）'); }
-  if (h && ITEMS[h.id].shield && !shieldTold) { shieldTold = true; feed('<b>盾</b>：右クリックを押している間かまえます。正面から来る攻撃を防げます'); }
+  $('tUse').textContent = t(!h ? 'use.use' : ITEMS[h.id].block ? 'use.place' : ITEMS[h.id].food ? 'use.eat' : ITEMS[h.id].bow ? 'use.draw' : ITEMS[h.id].shield ? 'use.raise' : 'use.use');
+  if (h && ITEMS[h.id].bow && !bowTold) { bowTold = true; feed(t('feed.bowTip')); }
+  if (h && ITEMS[h.id].shield && !shieldTold) { shieldTold = true; feed(t('feed.shieldTip')); }
   renderStats(); updateFP();
 }
 function renderBoard() {
@@ -582,7 +585,7 @@ function renderBoard() {
   const ids = Object.keys(room.roster).sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
   $('board').innerHTML = '';
   for (const id of ids) { const p = room.players[id]; if (!p) continue; const d = document.createElement('div'); d.append(faceCanvas(p.char, 16)); const n = document.createElement('span'); n.innerHTML = `<span style="color:${p.color}">${esc(p.name)}</span>`; d.append(n); if (room.alive && !room.alive[id]) d.style.opacity = 0.4; const b = document.createElement('b'); b.textContent = p.kills; d.append(b); $('board').appendChild(d); }
-  if (room.alive) { const L = document.createElement('div'); L.innerHTML = `<span>残り</span><b>${Object.keys(room.alive).length}人</b>`; $('board').prepend(L); }
+  if (room.alive) { const L = document.createElement('div'); L.innerHTML = `<span>${t('hud.alive')}</span><b>${t('hud.aliveN', Object.keys(room.alive).length)}</b>`; $('board').prepend(L); }
 }
 function fmt(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 function borderR() { const t = gameT(); if (t < SHRINK) return 999; return Math.max(4, WS * 0.6 - (t - SHRINK) / (DUR - SHRINK) * (WS * 0.6 - 4)); }
@@ -669,7 +672,7 @@ function actions(dt) {
       S.hit(); exhaust += 0.1 * HUNGER; o.hurtT = 0.3;
       if (it?.dur) inv.wear(inv.main, inv.sel, it.tool === 'sword' ? 1 : 2);
       if (player.sprinting && ch > 0.9) player.sprinting = false;
-      if (gameT() < SAFE) feed('準備時間中は攻撃できません');
+      if (gameT() < SAFE) feed(t('feed.safeAtk'));
       lastAtk = performance.now(); digT = 0; return;
     }
     lastAtk = performance.now();
@@ -695,7 +698,7 @@ function actions(dt) {
           if (hit.b === B.leaves && Math.random() < 0.08) drop = 'apple';
           if (drop) dropFromBlock(drop, hit.x, hit.y, hit.z);
         }
-        if (it?.dur && d.hard > 0 && inv.wear(inv.main, inv.sel, it.tool && it.tool !== 'sword' ? 1 : 2)) { S.brk('wood'); feed(`${it.name}が壊れた`); }
+        if (it?.dur && d.hard > 0 && inv.wear(inv.main, inv.sel, it.tool && it.tool !== 'sword' ? 1 : 2)) { S.brk('wood'); feed(t('feed.broke', it.name)); }
         digT = 0; digKey = null; crack.visible = false;
       }
     }
@@ -710,8 +713,8 @@ function actions(dt) {
       else openGui('furnace', furnaceAt(hit.x, hit.y, hit.z));
       return;
     }
-    if (it?.bow) { if (inv.count('arrow') > 0) bowCharge = 0; else feed('矢がありません'); }
-    else if (it?.food) { if (food < 20) eatT = 0; else feed('おなかがいっぱいです'); }
+    if (it?.bow) { if (inv.count('arrow') > 0) bowCharge = 0; else feed(t('feed.noArrow')); }
+    else if (it?.food) { if (food < 20) eatT = 0; else feed(t('feed.full')); }
     else if (it?.block && hit?.face) {
       const onPlant = BLOCKS[hit.b].plant, x = onPlant ? hit.x : hit.x + hit.face[0], y = onPlant ? hit.y : hit.y + hit.face[1], z = onPlant ? hit.z : hit.z + hit.face[2], cur = world.get(x, y, z);
       if (world.inside(x, z) && y < world.H - 1 && (!cur || cur === B.water || BLOCKS[cur].plant) && !overlapsAnyone(x, y, z)) {
@@ -795,7 +798,7 @@ function frame(t) {
       // 走るのは、Ctrl（または W 2回押し・スティックを奥まで）を押している間だけ。満腹度が3以下だと走れない
       const wantRun = keys.has('ControlLeft') || keys.has('ControlRight') || sprintTap || Math.hypot(T.mx, T.my) > 0.92;
       I.run = wantRun && food > 6;
-      if (wantRun && food <= 6 && I.f > 0.3 && performance.now() - hungryMsgT > 8000) { hungryMsgT = performance.now(); feed('おなかが減って走れません。りんごを食べよう'); }
+      if (wantRun && food <= 6 && I.f > 0.3 && performance.now() - hungryMsgT > 8000) { hungryMsgT = performance.now(); feed(t('feed.hungry')); }
     }
     if (spectator) {
       const d = player.dir(), sp = keys.has('ControlLeft') ? 24 : 12, rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
@@ -809,7 +812,7 @@ function frame(t) {
       const zc = zoneC(); out = Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]) > borderR();
       if (out && !player.para) { borderDmgT += dt; if (borderDmgT > 1) { borderDmgT = 0; hurt(zoneDmg(), null, null, 'border'); } }
     } else if (performance.now() > respawnAt) becomeSpectator();
-    else $('smallMsg').textContent = `順位 ${Object.keys(room.alive || {}).length + 1}位　まもなく観戦に切り替わります`;
+    else $('smallMsg').textContent = t('hud.rankSoon', Object.keys(room.alive || {}).length + 1);
     tickFurnaces(dt); gui.tick();
     items.update(dt, spectator || dead ? null : player.p, onTouchItem);
     posT += dt;
@@ -875,15 +878,15 @@ function frame(t) {
     const left = tg < 0 ? -tg : DUR - tg;
     $('clock').textContent = tg < 0 ? `${Math.ceil(-tg)}` : fmt(left);
     const ph = $('phase');
-    if (tg < 0) { ph.textContent = 'まもなく開始'; ph.className = 'phase'; }
-    else if (tg < SAFE) { ph.textContent = `準備時間：攻撃できません（あと${fmt(SAFE - tg)}）`; ph.className = 'phase safe'; }
-    else if (tg < SHRINK) { ph.textContent = `戦闘中・安全地帯の縮小まで${fmt(SHRINK - tg)}`; ph.className = 'phase fight'; }
-    else if (out && !spectator) { const zc = zoneC(); ph.textContent = `安全地帯の外！ 中心まで${Math.round(Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]))}m`; ph.className = 'phase danger'; }
-    else { ph.textContent = '安全地帯が縮小中'; ph.className = 'phase border'; }
-    if (player.para && !spectator) { ph.textContent = tg < 0 ? 'まもなく降下' : 'パラシュート降下中（マウスで向き・WASDで移動）'; ph.className = 'phase'; }
-    if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); feed('島のどこかに<b>宝箱が2つ</b>あります（見つけにくい所にあります）'); }
-    if (tg >= SAFE && !announced.fight) { announced.fight = true; S.gong(); feed('<b>戦闘開始！</b>'); }
-    if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed('<b>安全地帯が縮み始めた！</b> 赤い壁の外にいると体力が減ります'); }
+    if (tg < 0) { ph.textContent = t('phase.soon'); ph.className = 'phase'; }
+    else if (tg < SAFE) { ph.textContent = t('phase.prep', fmt(SAFE - tg)); ph.className = 'phase safe'; }
+    else if (tg < SHRINK) { ph.textContent = t('phase.fight', fmt(SHRINK - tg)); ph.className = 'phase fight'; }
+    else if (out && !spectator) { const zc = zoneC(); ph.textContent = t('phase.outside', Math.round(Math.hypot(player.p[0] - zc[0], player.p[2] - zc[1]))); ph.className = 'phase danger'; }
+    else { ph.textContent = t('phase.closing'); ph.className = 'phase border'; }
+    if (player.para && !spectator) { ph.textContent = t(tg < 0 ? 'phase.dropSoon' : 'phase.diving'); ph.className = 'phase'; }
+    if (tg >= 0 && !announced.start) { announced.start = true; S.gong(); feed(t('feed.chestTip')); }
+    if (tg >= SAFE && !announced.fight) { announced.fight = true; S.gong(); feed(t('feed.fight')); }
+    if (tg >= SHRINK && !announced.shrink) { announced.shrink = true; S.gong(); feed(t('feed.shrink')); }
     R.border.position.x = zoneC()[0]; R.border.position.z = zoneC()[1]; R.setBorder(tg >= SHRINK ? borderR() : 999); R.setDay(Math.max(0, Math.min(1, tg / DUR)));
     if (isHost && tg >= DUR && room.phase === 'game') endMatch();
     R.updateDirty(world);
@@ -913,19 +916,19 @@ function showResult() {
   const alive = Object.keys(room.alive || {}).filter(id => id !== room.winner).sort((a, b) => (room.players[b]?.kills || 0) - (room.players[a]?.kills || 0));
   const order = [...(room.winner ? [room.winner] : []), ...alive, ...[...(room.elim || [])].reverse()].filter((id, i, arr) => arr.indexOf(id) === i && room.players[id]);
   const W = room.players[room.winner];
-  $('winTitle').textContent = !W ? '試合終了' : room.winner === myId ? 'ドン勝！' : `${W.name} がドン勝！`;
+  $('winTitle').textContent = !W ? t('res.over') : room.winner === myId ? t('res.win') : t('res.winner', W.name);
   $('winTitle').className = room.winner === myId ? 'win me' : 'win';
   $('rank').innerHTML = '';
   order.forEach((id, i) => {
     const p = room.players[id];
-    const d = document.createElement('div'); d.append(`${i + 1}位`); d.append(faceCanvas(p.char, 30));
-    const n = document.createElement('span'); n.innerHTML = `<b style="color:${p.color};font-family:inherit">${esc(p.name)}</b>${id === myId ? '（あなた）' : ''}`; d.append(n);
-    const k = document.createElement('b'); k.textContent = `${p.kills}キル`; d.append(k); $('rank').appendChild(d);
+    const d = document.createElement('div'); d.append(t('res.rank', i + 1)); d.append(faceCanvas(p.char, 30));
+    const n = document.createElement('span'); n.innerHTML = `<b style="color:${p.color};font-family:inherit">${esc(p.name)}</b>${id === myId ? t('lobby.you') : ''}`; d.append(n);
+    const k = document.createElement('b'); k.textContent = t('res.kills', p.kills); d.append(k); $('rank').appendChild(d);
   });
   if (room.winner === myId) S.win?.();
   const waiting = room.queue.filter(id => room.players[id] && !(id in room.roster)).length;
-  $('resNote').textContent = solo ? 'ひとりで練習した結果です。部屋を作ると友達と対戦できます。' : waiting ? `次の試合は、待っていた ${waiting}人が先に入ります。` : '';
-  $('bAgain').hidden = !isHost || room.kind === 'pub'; $('resWait').textContent = room.kind === 'pub' ? 'まもなく待合室に戻ります' : isHost ? '' : '部屋を作った人が次の試合を始めるのを待っています';
+  $('resNote').textContent = solo ? t('res.solo') : waiting ? t('res.next', waiting) : '';
+  $('bAgain').hidden = !isHost || room.kind === 'pub'; $('resWait').textContent = room.kind === 'pub' ? t('res.back') : isHost ? '' : t('res.waitHost');
 }
 
 world = new World(12345); R.buildAll(world);

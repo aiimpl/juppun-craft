@@ -1,13 +1,14 @@
 // 持ち物画面（持ち物・作業台・かまど・宝箱）
 import { ITEMS, matchRecipe, iconCanvas, SMELT, FUEL } from './blocks.js';
 import { MAIN, HOT, stackMax, same } from './inv.js';
+import { t } from './i18n.js';
 
 // GUI の座標は 1マス＝18。画面に合わせて拡大する
 const LAYOUT = {
-  inv: { w: 176, h: 166, title: 'クラフト', grid: { x: 98, y: 18, n: 2 }, out: { x: 154, y: 28 }, arrow: { x: 134, y: 28 }, armor: { x: 8, y: 8 }, preview: { x: 26, y: 8, w: 50, h: 70 } },
-  table: { w: 176, h: 166, title: '作業台', grid: { x: 30, y: 17, n: 3 }, out: { x: 124, y: 35 }, arrow: { x: 90, y: 35 } },
-  chest: { w: 176, h: 166, title: '宝箱', box: { x: 8, y: 18, rows: 3 } },
-  furnace: { w: 176, h: 166, title: 'かまど', fin: { x: 56, y: 17 }, ffuel: { x: 56, y: 53 }, fout: { x: 116, y: 35 }, arrow: { x: 79, y: 35 }, flame: { x: 57, y: 37 } },
+  inv: { w: 176, h: 166, title: 'gui.inv', grid: { x: 98, y: 18, n: 2 }, out: { x: 154, y: 28 }, arrow: { x: 134, y: 28 }, armor: { x: 8, y: 8 }, preview: { x: 26, y: 8, w: 50, h: 70 } },
+  table: { w: 176, h: 166, title: 'gui.table', grid: { x: 30, y: 17, n: 3 }, out: { x: 124, y: 35 }, arrow: { x: 90, y: 35 } },
+  chest: { w: 176, h: 166, title: 'gui.chest', box: { x: 8, y: 18, rows: 3 } },
+  furnace: { w: 176, h: 166, title: 'gui.furnace', fin: { x: 56, y: 17 }, ffuel: { x: 56, y: 53 }, fout: { x: 116, y: 35 }, arrow: { x: 79, y: 35 }, flame: { x: 57, y: 37 } },
 };
 
 export class ContainerUI {
@@ -50,7 +51,7 @@ export class ContainerUI {
     const L = LAYOUT[this.kind], k = this.scale();
     const p = document.createElement('div'); p.className = 'gui'; p.style.width = L.w * k + 'px'; p.style.height = L.h * k + 'px'; p.style.setProperty('--k', k);
     const label = (t, x, y) => { const d = document.createElement('div'); d.className = 'guiLabel'; d.textContent = t; d.style.left = x * k + 'px'; d.style.top = y * k + 'px'; p.appendChild(d); };
-    label(L.title, L.grid ? L.grid.x : 8, L.grid ? L.grid.y - 11 : 6); if (this.kind !== 'inv') label('持ち物', 8, 73);
+    label(t(L.title), L.grid ? L.grid.x : 8, L.grid ? L.grid.y - 11 : 6); if (this.kind !== 'inv') label(t('gui.bag'), 8, 73);
     const slot = (x, y, arr, i, kind, extra = '') => {
       const d = document.createElement('div'); d.className = 'gslot ' + extra; d.style.left = (x - 1) * k + 'px'; d.style.top = (y - 1) * k + 'px';
       this.fillSlot(d, arr[i]);
@@ -81,7 +82,7 @@ export class ContainerUI {
       for (let i = 0; i < 4; i++) slot(L.armor.x, L.armor.y + i * 18, this.inv.armor, i, 'armor', 'armor' + i);
       const pv = document.createElement('div'); pv.className = 'preview'; Object.assign(pv.style, { left: L.preview.x * k + 'px', top: L.preview.y * k + 'px', width: L.preview.w * k + 'px', height: L.preview.h * k + 'px' });
       const f = this.faceCanvas(); f.style.width = f.style.height = 30 * k + 'px'; pv.appendChild(f);
-      const a = document.createElement('div'); a.className = 'guiSmall'; a.textContent = `防御 ${this.inv.armorPoints()}`; pv.appendChild(a); p.appendChild(pv);
+      const a = document.createElement('div'); a.className = 'guiSmall'; a.textContent = t('gui.armor', this.inv.armorPoints()); pv.appendChild(a); p.appendChild(pv);
     }
     if (L.grid) {
       const n = L.grid.n;
