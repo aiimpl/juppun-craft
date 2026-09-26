@@ -46,15 +46,22 @@ export class Player {
     if (dm > md) { v[0] += dvx / dm * md; v[2] += dvz / dm * md; } else { v[0] = tx; v[2] = tz; }
     if (this.para && this.inWater) { this.para = false; this.onParaLand?.(); }
     if (this.inWater) { v[1] -= GRAV * 0.2 * dt; if (v[1] < -2.5) v[1] = -2.5; if (I.jump) v[1] = Math.min(v[1] + 24 * dt, 3.2); this.fallTop = p[1]; }
+    // 水から上がる：岸にぶつかりながらジャンプを押すと、段差1つぶんだけ跳び上がる（上に空きがあるときだけ）
+    const feetWet = this.inWater || this.w.get(Math.floor(p[0]), Math.floor(p[1] + 0.05), Math.floor(p[2])) === B.water;
+    if (feetWet && I.jump && this.hitWall && m > 0.1) {
+      const ox = fx / m * 0.35, oz = fz / m * 0.35;
+      if (!this.hits(p[0] + ox - PW, p[1] + 0.6, p[2] + oz - PW, p[0] + ox + PW, p[1] + 0.6 + PH, p[2] + oz + PW)) v[1] = Math.max(v[1], 6);
+    }
     else { v[1] -= GRAV * dt; if (v[1] < -50) v[1] = -50; if (I.jump && this.onGround) { v[1] = JUMP_V; this.onGround = false; this.onJump?.(); } }
     if (this.inWeb) { v[1] = Math.max(v[1], -1.2); if (v[1] > 1) v[1] = 1; }
     if (this.para) { v[1] = Math.max(v[1], -3.4); this.fallTop = p[1]; }
     const wasG = this.onGround;
+    this.hitWall = false;
     // しゃがんでいると足場の外へ出ない
     for (const ax of [0, 2]) {
       const d = v[ax] * dt;
       if (I.sneak && wasG && d) { const q = p.slice(); q[ax] += d; if (!this.hits(q[0] - PW, q[1] - 0.6, q[2] - PW, q[0] + PW, q[1] - 0.01, q[2] + PW)) { v[ax] = 0; continue; } }
-      if (this.move(ax, d)) v[ax] = 0;
+      if (this.move(ax, d)) { v[ax] = 0; this.hitWall = true; }
     }
     this.onGround = false;
     if (this.move(1, v[1] * dt)) {
