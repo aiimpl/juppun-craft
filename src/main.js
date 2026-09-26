@@ -782,9 +782,9 @@ function hookPlayer() {
 // ---------- 毎フレーム ----------
 let hungryMsgT = 0, last = performance.now(), acc = 0, fpsN = 0, fpsT = 0, borderDmgT = 0, fov = 75;
 const announced = {};
-function frame(t) {
+function frame(ts) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  const dt = Math.min(0.1, (ts - last) / 1000); last = ts;
   fpsN++; fpsT += dt; if (fpsT > 1) { window.__game.fps = fpsN / fpsT; fpsN = fpsT = 0; }
   const cam = R.camera;
   if (state === 'play' && world) {
@@ -891,10 +891,10 @@ function frame(t) {
     if (isHost && tg >= DUR && room.phase === 'game') endMatch();
     R.updateDirty(world);
   } else if (world) {
-    const a = t / 20000; cam.position.set(WS / 2 + Math.cos(a) * 60, 40, WS / 2 + Math.sin(a) * 60); cam.lookAt(WS / 2, 20, WS / 2); fpRoot.visible = false;
+    const a = ts / 20000; cam.position.set(WS / 2 + Math.cos(a) * 60, 40, WS / 2 + Math.sin(a) * 60); cam.lookAt(WS / 2, 20, WS / 2); fpRoot.visible = false;
   }
   debris.update(dt);
-  if (world) R.frame(t / 1000);
+  if (world) R.frame(ts / 1000);
 }
 function tintModel(model, on) {
   if (model.userData.tinted === on) return; model.userData.tinted = on;
