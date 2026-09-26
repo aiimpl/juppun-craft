@@ -36,7 +36,7 @@ export class Renderer {
     const tex = new THREE.CanvasTexture(atlas); tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
     this.tex = tex;
     this.mat = new THREE.MeshLambertMaterial({ map: tex, vertexColors: true, alphaTest: 0.5 });
-    this.waterMat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, opacity: 0.72, depthWrite: false });
+    this.waterMat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide }); // 水の中から見上げても水面が見える
     // 島の外の海
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshLambertMaterial({ color: 0x3a64b8 }));
     sea.rotation.x = -Math.PI / 2; sea.position.set(WS / 2, SEA + 0.8, WS / 2); this.scene.add(sea); this.sea = sea;

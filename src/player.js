@@ -46,13 +46,13 @@ export class Player {
     if (dm > md) { v[0] += dvx / dm * md; v[2] += dvz / dm * md; } else { v[0] = tx; v[2] = tz; }
     if (this.para && this.inWater) { this.para = false; this.onParaLand?.(); }
     if (this.inWater) { v[1] -= GRAV * 0.2 * dt; if (v[1] < -2.5) v[1] = -2.5; if (I.jump) v[1] = Math.min(v[1] + 24 * dt, 3.2); this.fallTop = p[1]; }
-    // 水から上がる：岸にぶつかりながらジャンプを押すと、段差1つぶんだけ跳び上がる（上に空きがあるときだけ）
-    const feetWet = this.inWater || this.w.get(Math.floor(p[0]), Math.floor(p[1] + 0.05), Math.floor(p[2])) === B.water;
-    if (feetWet && I.jump && this.hitWall && m > 0.1) {
-      const ox = fx / m * 0.35, oz = fz / m * 0.35;
-      if (!this.hits(p[0] + ox - PW, p[1] + 0.6, p[2] + oz - PW, p[0] + ox + PW, p[1] + 0.6 + PH, p[2] + oz + PW)) v[1] = Math.max(v[1], 6);
-    }
     else { v[1] -= GRAV * dt; if (v[1] < -50) v[1] = -50; if (I.jump && this.onGround) { v[1] = JUMP_V; this.onGround = false; this.onJump?.(); } }
+    // 水から上がる：岸に向かって泳ぐ（またはジャンプを押す）と、段差1つぶんだけ跳び上がる（岸の上に空きがあるときだけ）
+    const feetWet = this.inWater || this.w.get(Math.floor(p[0]), Math.floor(p[1] + 0.05), Math.floor(p[2])) === B.water;
+    if (feetWet && (I.jump || I.f > 0.3) && this.hitWall && m > 0.1) {
+      const ox = fx / m * 0.35, oz = fz / m * 0.35, ty = Math.floor(p[1] + 0.1) + 1; // ty：1段上の岸の上面
+      if (!this.hits(p[0] + ox - PW, ty + 1e-3, p[2] + oz - PW, p[0] + ox + PW, ty + PH, p[2] + oz + PW)) v[1] = Math.max(v[1], Math.min(JUMP_V, Math.sqrt(2 * GRAV * (ty - p[1] + 0.2))));
+    }
     if (this.inWeb) { v[1] = Math.max(v[1], -1.2); if (v[1] > 1) v[1] = 1; }
     if (this.para) { v[1] = Math.max(v[1], -3.4); this.fallTop = p[1]; }
     const wasG = this.onGround;

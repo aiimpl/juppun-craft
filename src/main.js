@@ -842,6 +842,7 @@ function frame(ts) {
     const e = player.eye(), drop = player.input.sneak && !spectator ? 0.12 : 0;
     hurtRoll = Math.max(0, hurtRoll - dt * 3);
     cam.position.set(e[0], e[1] - drop, e[2]);
+    { const uw = !spectator && camBlend < 0.5 && world.get(Math.floor(e[0]), Math.floor(e[1] - drop), Math.floor(e[2])) === B.water; if ($('underwater').hidden === uw) $('underwater').hidden = !uw; } // 目が水の中なら青く
     cam.rotation.set(player.pitch, player.yaw, Math.sin(hurtRoll * Math.PI) * 0.12 * hurtDir, 'YXZ');
     // 降下中は後ろから（3人称）、着地したら目線（1人称）へ
     const want3 = player.para && !spectator && !dead ? 1 : 0;

@@ -78,6 +78,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 .itemname{font-size:15px;height:20px;font-family:var(--pix);text-shadow:2px 2px 0 #3f3f3f;transition:opacity .2s}
 .hurt{position:absolute;inset:0;box-shadow:inset 0 0 120px rgba(255,0,0,.55);opacity:0;transition:opacity .4s}
 .hurt.on{opacity:1;transition:none}
+.underwater{position:absolute;inset:0;background:rgba(40,90,190,.38);pointer-events:none}
 .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px}
 .big{font-family:var(--pix);font-size:clamp(40px,10vw,80px)}
 .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:var(--glass2);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.9;white-space:nowrap;text-shadow:none}
@@ -188,6 +189,7 @@ input[type=text]{width:100%;border:2px solid rgba(255,255,255,.18);background:rg
 </section>
 
 <div id="hud" hidden>
+  <div class="underwater" id="underwater" hidden></div>
   <div class="cross"></div>
   <div class="bowbar" id="bowbar" hidden><i id="bowfill"></i></div>
   <div class="feed" id="feed"></div>
